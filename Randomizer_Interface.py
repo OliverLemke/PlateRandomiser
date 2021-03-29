@@ -315,13 +315,13 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
         sep="\t"
     
     with open(out_file,"w") as file:
+        file.write("Analysis.Plate"+sep+"Analysis.Row"+sep+"Analysis.Column"+sep+"Sample.Name"+sep+"Peptide.Concentration"+sep)
         for ref_column in ref_columns:
             file.write("%s" %ref_column)
             file.write(sep)
         for column in imp_columns:
             file.write("%s" %column)
             file.write(sep)
-        file.write("Analysis.Plate"+sep+"Analysis.Row"+sep+"Analysis.Column"+sep)
         if remaining_columns==[]:        
             file.write("\n")
         else:
@@ -333,16 +333,40 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                     file.write("%s\n" %column)    
         for index,plate in enumerate(Plates_final):
             for index2,el in enumerate(plate):
+                file.write(str(index+1)+sep)
+                file.write("%s" %dict_alph[np.floor(index2/num_columns)])
+                file.write(sep)
+                file.write(str(np.mod(index2,num_columns)+1)+sep)
                 if (el != Reference_1) & (el != Reference_2) & (el != "Blank"):
                     try:
                         check = data_dict[el]
                     except:
-                        try:
-                            check = data_dict[float(el)]
-                            el = float(el)
-                        except:
-                            check = data_dict[int(float(el))]
-                            el = int(float(el))
+                        #try:
+                        #    check = data_dict[float(el)]
+                        #    el = float(el)
+                        #except:
+                        check = data_dict[int(float(el))]
+                        el = int(float(el))
+                if el == Reference_1:
+                    file.write(Reference_1+"_{:03}".format(c_Ref_1))
+                elif el == Reference_2:
+                    file.write(Reference_2+"_{:03}".format(c_Ref_2))
+                elif el == "Blank":
+                    file.write("Blank_"+"{:03}".format(c_Blank))
+                else:
+                    file.write(str(el))
+                file.write(sep)
+                file.write("1"+sep)
+                #if (el != Reference_1) & (el != Reference_2) & (el != "Blank"):
+                #    try:
+                #        check = data_dict[el]
+                #    except:
+                #        try:
+                #            check = data_dict[float(el)]
+                #            el = float(el)
+                #        except:
+                #            check = data_dict[int(float(el))]
+                #            el = int(float(el))
                 if el == Reference_1:
                     for i in range(len(ref_columns)):
                         file.write(Reference_1+"_{:03}".format(c_Ref_1)+sep)
@@ -371,10 +395,6 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                     for column in imp_columns:
                         file.write("%s" %data_dict[el][column])
                         file.write(sep)
-                file.write(str(index+1)+sep)
-                file.write("%s" %dict_alph[np.floor(index2/num_columns)])
-                file.write(sep)
-                file.write(str(np.mod(index2,num_columns)+1)+sep)
                 if remaining_columns==[]:        
                     file.write("\n")
                 else:
@@ -913,6 +933,8 @@ class Ui_Form(QtWidgets.QWidget):
         
         sys.stdout = Stream(newText=self.onUpdateText)
         sys.stderr = Stream(newText=self.onUpdateText)
+        
+        self.style_reset = self.groupBox_Input.styleSheet()
 
     def retranslateUi(self, Form):
         _translate = QtCore.QCoreApplication.translate
@@ -1073,29 +1095,37 @@ class Ui_Form(QtWidgets.QWidget):
             self.data = pd.read_excel(self.in_file, sheet_name=list_c)
             self.data = pd.concat(self.data)
             self.get_selections_input()
-        except:
-            msg = QtWidgets.QMessageBox(self)
-            msg.setWindowTitle("Error")
-            msg.setText("An Error occured")
-            msg.setInformativeText("Please select Input File first.")
-            msg.setIcon(QtWidgets.QMessageBox.Warning)
-            msg.setStandardButtons(QtWidgets.QMessageBox.Cancel)
-            msg.setDefaultButton(QtWidgets.QMessageBox.Cancel)
-            msg.exec_()    
-    
-    
-    ##### Error Messages if certain inputs are not defined
-    
+        except:   
+            self.raiseError("Please select Input File first.")    
     
     def run_script(self):
-        self.get_Input()
+        self.groupBox_Parameters.setStyleSheet(self.style_reset)
+        self.groupBox_Input.setStyleSheet(self.style_reset)
+        try:
+            self.get_Input()
+            if self.num_wells_to_fill <= 0:
+                print("ERROR: Not enough wells to be filled with samples.")
+                self.groupBox_Parameters.setObjectName("ColoredGroupBox")
+                self.groupBox_Parameters.setStyleSheet("QGroupBox#ColoredGroupBox { border: 1px solid red;}")
+                self.raiseError("Parameter selection failed.")
+        except:
+            print("ERROR: Parameter selection failed.")
+            self.groupBox_Parameters.setObjectName("ColoredGroupBox")
+            self.groupBox_Parameters.setStyleSheet("QGroupBox#ColoredGroupBox { border: 1px solid red;}")
+            self.raiseError("Parameter selection failed.")
         set_seed(self.seed)
-        self.get_columns()
-        self.data_dict, self.Fingerprints = get_data_dict(self.data, self.ref_columns, self.imp_columns)
-        self.Fingerprint_IDs, self.Fingerprints_list, num_Fingerprint = get_Fingerprint(self.data_dict, self.Fingerprints, self.imp_columns)
-        self.num_Fingerprint, self.num_plates, self.num_Sample_per_plate, self.num_Samples_overlap = get_Fingerprint_statistics(self.Fingerprints_list, self.num_wells_to_fill, self.num_plates)
-        print("--------------------")
-        print("Starting Sample Distribution:")
+        try:
+            self.get_columns()
+            self.data_dict, self.Fingerprints = get_data_dict(self.data, self.ref_columns, self.imp_columns)
+            self.Fingerprint_IDs, self.Fingerprints_list, num_Fingerprint = get_Fingerprint(self.data_dict, self.Fingerprints, self.imp_columns)
+            self.num_Fingerprint, self.num_plates, self.num_Sample_per_plate, self.num_Samples_overlap = get_Fingerprint_statistics(self.Fingerprints_list, self.num_wells_to_fill, self.num_plates)
+            print("--------------------")
+            print("Starting Sample Distribution:")
+        except:
+            print("ERROR: Input selection or Fingerprint generation failed.")
+            self.groupBox_Input.setObjectName("ColoredGroupBox")  
+            self.groupBox_Input.setStyleSheet("QGroupBox#ColoredGroupBox { border: 1px solid red;}")
+            self.raiseError("Input selection or Fingerprint generation failed.")
         self.Plates_overlap = distribute_Samples(self.Fingerprints_list, self.data_dict, self.num_Sample_per_plate, self.num_plates)
         if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
             self.Plates_final = distribute_References(self.Plates_overlap, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2)
@@ -1121,14 +1151,7 @@ class Ui_Form(QtWidgets.QWidget):
                 else:
                     self.plainTextEdit_Fingerprints_Preview.setPlainText(self.plainTextEdit_Fingerprints_Preview.toPlainText()+"\n"+str(Fingerprint_IDs[i])+": "+str(num_Fingerprint[i]))
         except:
-            msg = QtWidgets.QMessageBox(self)
-            msg.setWindowTitle("Error")
-            msg.setText("An Error occured")
-            msg.setInformativeText("Please select columns for label and randomization.")
-            msg.setIcon(QtWidgets.QMessageBox.Warning)
-            msg.setStandardButtons(QtWidgets.QMessageBox.Cancel)
-            msg.setDefaultButton(QtWidgets.QMessageBox.Cancel)
-            msg.exec_()
+            self.raiseError("Please select columns for label and randomization.")
             
     def show_output(self):
         k = self.comboBox_Output_Selection.currentText()
@@ -1145,6 +1168,16 @@ class Ui_Form(QtWidgets.QWidget):
     def __del__(self):
         sys.stdout = sys.__stdout__
         sys.stderr = sys.__stderr__
+        
+    def raiseError(self, error):
+        msg = QtWidgets.QMessageBox(self)
+        msg.setWindowTitle("Error")
+        msg.setText("An Error occured")
+        msg.setInformativeText(error)
+        msg.setIcon(QtWidgets.QMessageBox.Warning)
+        msg.setStandardButtons(QtWidgets.QMessageBox.Cancel)
+        msg.setDefaultButton(QtWidgets.QMessageBox.Cancel)
+        msg.exec_()    
 
 if __name__ == "__main__":
     import sys
