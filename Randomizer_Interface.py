@@ -601,7 +601,7 @@ def plot_PlateLayout(data, ref_column, imp_columns, Fingerprint_IDs, num_rows, n
     
     fs = 15
     
-    for k in range(0,np.shape(Plates)[2],2):
+    for k in range(0,num_plates,2):
         fig = plt.figure(constrained_layout=True)
         gs = fig.add_gridspec(2,1)
         fig.set_size_inches(20,16)
@@ -649,12 +649,35 @@ def plot_PlateLayout(data, ref_column, imp_columns, Fingerprint_IDs, num_rows, n
             ax2.set_ylim(-.5,num_rows-.5)
             ax2.grid(which="minor",linestyle="--") 
             ax2.set_title("Plate "+str(k+2),fontsize=fs)
+        plt.savefig(out_file+str(k+1)+"_and_"+str(k+2)+".png")  
+        
+    for k in range(0,num_plates):
+        fig,ax = plt.subplots()
+        fig.set_size_inches(20,8)
+        rows = np.arange(num_rows-1,-1,-1)
+        columns = np.arange(0,num_columns)
+        
+        for i, row in enumerate(rows):
+            for j, column in enumerate(columns):
+                c = Plates[i,j,k]
+                ax.text(column, row,c,va="center",ha="center")
+        
+        ax.imshow(Plates_color[::-1,:,k],cmap=cmap,aspect=.5, vmin=c_min, vmax=c_max)
+        
+        ax.set_xticks(columns)
+        ax.set_xticks(columns-.5, minor=True)
+        ax.set_xticklabels(np.int_(columns)+1,fontsize=fs)
+        ax.set_yticks(rows)
+        ax.set_yticks(rows-.5, minor=True)
+        ax.set_yticklabels([dict_num2alph[item] for item in rows][::-1],fontsize=fs)
+        ax.set_xlim(-.5,num_columns-.5)
+        ax.set_ylim(-.5,num_rows-.5)
+        ax.grid(which="minor",linestyle="--")  
+        ax.set_title("Plate "+str(k+1),fontsize=fs)
         plt.savefig(out_file+str(k+1)+".png")  
     return
 
 #%%
-### Exception if not in all 3 boxes columns are selected
-### Print Error to console?
 
 class Stream(QtCore.QObject):
     newText = QtCore.pyqtSignal(str)
@@ -1101,6 +1124,7 @@ class Ui_Form(QtWidgets.QWidget):
     def run_script(self):
         self.groupBox_Parameters.setStyleSheet(self.style_reset)
         self.groupBox_Input.setStyleSheet(self.style_reset)
+        self.comboBox_Output_Selection.clear()
         try:
             self.get_Input()
             if self.num_wells_to_fill <= 0:
@@ -1137,7 +1161,7 @@ class Ui_Form(QtWidgets.QWidget):
         print_Statistics(self.Fingerprint_IDs, self.Plates_final, self.num_Fingerprint_per_plate, self.Reference_1, self.Reference_2)
         self.data_out, self.Fingerprint_IDs_plate = read_plates(self.imp_columns, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText()))
         plot_PlateLayout(self.data_out, self.ref_columns[0], self.imp_columns, self.Fingerprint_IDs_plate, self.num_rows, self.num_columns, self.num_plates, os.path.join(self.lineEdit_Output.text(),"Plate_"))
-        self.comboBox_Output_Selection.addItems([str(k+1) for k in range(0,self.num_plates,2)])
+        self.comboBox_Output_Selection.addItems([str(k+1) for k in range(0,self.num_plates)])
         self.comboBox_Output_Selection.setCurrentText("1")
     
     def get_preview(self):
@@ -1155,7 +1179,8 @@ class Ui_Form(QtWidgets.QWidget):
             
     def show_output(self):
         k = self.comboBox_Output_Selection.currentText()
-        self.pixmap = QtGui.QPixmap(os.path.join(self.lineEdit_Output.text(),"Plate_"+str(k)+".png")).scaledToWidth(400)
+        self.pixmap = QtGui.QPixmap(os.path.join(self.lineEdit_Output.text(),"Plate_"+str(k)+".png"))
+        #.scaledToWidth(400)
         self.Pixmap_Output.setPixmap(self.pixmap)
         
     def onUpdateText(self, text):
