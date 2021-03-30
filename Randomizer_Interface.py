@@ -3,8 +3,6 @@
 # Form implementation generated from reading ui file 'Randomizer.ui'
 #
 # Created by: PyQt5 UI code generator 5.9.2
-#
-# WARNING! All changes made in this file will be lost!
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 import numpy as np
@@ -126,6 +124,8 @@ def get_Fingerprint(data_dict, Fingerprints, imp_columns):
         Unique Fingerprints.
     Fingerprints_list : list of str
         Samples assigned to each Fingerprint.
+    num_Fingerprint: array
+        Number of Occurence for every Fingerprint.
     """
     
     Fingerprints = np.asarray(Fingerprints,dtype="U25")
@@ -440,15 +440,15 @@ def get_Statistics(data_dict, Fingerprint_IDs, Plates_final, imp_columns):
             try:
                 check = data_dict[el]
             except:
+                #try:
+                #    check = data_dict[float(el)]
+                #    el = float(el)
+                #except:
                 try:
-                    check = data_dict[float(el)]
-                    el = float(el)
+                    check = data_dict[int(float(el))]
+                    el = int(float(el))
                 except:
-                    try:
-                        check = data_dict[int(float(el))]
-                        el = int(float(el))
-                    except:
-                        pass
+                    pass
             for index,fingerprint in enumerate(Fingerprint_IDs):
                 try:
                     if all(data_dict[el][imp_columns].values.astype("U25")==fingerprint):
@@ -1025,7 +1025,7 @@ class Ui_Form(QtWidgets.QWidget):
             self.num_References = int(self.spinBox_min_Ref.value())
             self.percentage_Ref_1 = float(self.doubleSpinBox_perc_Ref1.value())
             print("Minimal Number of References: {0}".format(self.num_References))
-            print("Perentage of Reference 1: {0}".format(self.percentage_Ref_1))
+            print("Percentage of Reference 1: {0}".format(self.percentage_Ref_1))
             self.num_wells_to_fill = self.num_wells - self.num_Blanks - self.num_References
             
     
@@ -1163,6 +1163,7 @@ class Ui_Form(QtWidgets.QWidget):
         plot_PlateLayout(self.data_out, self.ref_columns[0], self.imp_columns, self.Fingerprint_IDs_plate, self.num_rows, self.num_columns, self.num_plates, os.path.join(self.lineEdit_Output.text(),"Plate_"))
         self.comboBox_Output_Selection.addItems([str(k+1) for k in range(0,self.num_plates)])
         self.comboBox_Output_Selection.setCurrentText("1")
+        self.save_Summary()
     
     def get_preview(self):
         try:
@@ -1203,6 +1204,50 @@ class Ui_Form(QtWidgets.QWidget):
         msg.setStandardButtons(QtWidgets.QMessageBox.Cancel)
         msg.setDefaultButton(QtWidgets.QMessageBox.Cancel)
         msg.exec_()    
+        
+    def save_Summary(self):
+        with open(os.path.join(self.lineEdit_Output.text(),"Summary.txt"),"w") as file:
+            file.write("--------------------\n")
+            file.write("Summary\n")
+            file.write("--------------------\n")
+            file.write("--------------------\n")
+            file.write("Input\n")
+            file.write("--------------------\n")
+            file.write("Chosen Plate Layout: {0}\n".format(self.Plate_layout))
+            file.write("Reference 1: {0}\n".format(self.Reference_1))
+            file.write("Reference 2: {0}\n".format(self.Reference_2))
+            file.write("Number of Blanks: {0}\n".format(self.num_Blanks))
+            file.write("Seed: {0}\n".format(self.seed))
+            if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
+                file.write("Number of Reference 1: {0}\n".format(self.num_Ref_1))
+                file.write("Number of Reference 2: {0}\n".format(self.num_Ref_2))
+            else:
+                file.write("Minimal Number of References: {0}\n".format(self.num_References))
+                file.write("Percentage of Reference 1: {0}\n".format(self.percentage_Ref_1))
+            file.write("Number of Plates: {0:d}\n".format(self.num_plates))
+            file.write("Columns used for Randomisation: ")
+            for ind,imp_column in enumerate(self.imp_columns):
+                file.write(str(imp_column))
+                if ind == len(self.imp_columns)-1:
+                    file.write("\n")
+                else:
+                    file.write(", ")
+            file.write("--------------------\n")
+            file.write("Fingerprint Statistics\n")
+            file.write("--------------------\n")
+            for ind,fingerprint in enumerate(self.Fingerprint_IDs):
+                file.write(str(fingerprint)+": "+str(self.num_Fingerprint[ind])+"\n")
+            file.write("--------------------\n")
+            file.write("Plate Statistics\n")
+            file.write("--------------------\n")
+            for ind_p,plate in enumerate(self.Plates_final):
+                file.write("Plate "+str(ind_p+1)+"\n")
+                file.write("#"+self.Reference_1+": %d\n" %len(np.where(plate==self.Reference_1)[0]))
+                file.write("#"+self.Reference_2+": %d\n" %len(np.where(plate==self.Reference_2)[0]))
+                file.write("#Blank: %d\n" %len(np.where(plate=="Blank")[0]))
+                for index, fingerprint in enumerate(self.Fingerprint_IDs):
+                    file.write("#"+str(fingerprint)+":%d\n" %self.num_Fingerprint_per_plate[index,ind_p])   
+                file.write("-----------------------\n")
 
 if __name__ == "__main__":
     import sys
