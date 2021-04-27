@@ -1031,7 +1031,7 @@ class Ui_Form(QtWidgets.QWidget):
     
     def open_file(self):
         self.file = QtWidgets.QFileDialog(self)
-        self.fname, self.mask = self.file.getOpenFileName(self,"Load Data","","Table data (*.csv *.tsv *.txt *.xls *.xlsx)")
+        self.fname, self.mask = self.file.getOpenFileName(self,"Load Data","","Table data (*.csv *.tsv *.txt *.xls *.xlsx *.xlsm)")
         self.lineEdit_Input.setText(self.fname)
         self.in_file = str(self.lineEdit_Input.text())
         self.read_Input()
@@ -1075,7 +1075,7 @@ class Ui_Form(QtWidgets.QWidget):
         elif self.in_file.endswith(".csv"):
             self.data = pd.read_csv(self.in_file, sep = ",", encoding = "latin")
             self.get_selections_input()
-        elif (self.in_file.endswith(".xlsx")) or (self.in_file.endswith(".xls")):
+        elif (self.in_file.endswith(".xlsx")) or (self.in_file.endswith(".xls")) or (self.in_file.endswith(".xlsm")):
             self.data_raw = pd.read_excel(self.in_file, sheet_name=None)
             self.vbox_Sheets = QtWidgets.QVBoxLayout(self)
             self.buttongroup_Sheets = QtWidgets.QButtonGroup(self, exclusive=False)
