@@ -304,12 +304,11 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
 
     dict_alph, dict_num = get_Dictionaries()
     
-    print("Writing output:")
     c_Ref_1 = 1
     c_Ref_2 = 1
     c_Blank = 1
     
-    if out_file[:-4]==".csv":
+    if out_file[-4:]==".csv":
         sep=","
     else:
         sep="\t"
@@ -1156,6 +1155,7 @@ class Ui_Form(QtWidgets.QWidget):
         else:
             self.Plates_final = distribute_References(self.Plates_overlap, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1)
         print("--------------------")
+        print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
         generate_Output(self.data_dict, self.Plates_final, self.ref_columns, self.imp_columns, self.num_columns, self.output_columns, self.Reference_1, self.Reference_2, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())) 
         self.num_Fingerprint_per_plate = get_Statistics(self.data_dict, self.Fingerprint_IDs, self.Plates_final, self.imp_columns)
         print_Statistics(self.Fingerprint_IDs, self.Plates_final, self.num_Fingerprint_per_plate, self.Reference_1, self.Reference_2)
@@ -1164,6 +1164,7 @@ class Ui_Form(QtWidgets.QWidget):
         self.comboBox_Output_Selection.addItems([str(k+1) for k in range(0,self.num_plates)])
         self.comboBox_Output_Selection.setCurrentText("1")
         self.save_Summary()
+        print("--------------------")
     
     def get_preview(self):
         try:
