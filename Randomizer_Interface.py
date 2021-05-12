@@ -76,7 +76,7 @@ def set_seed(seed=-1):
     return
 
 # Read data: add tsv, csv and xlsx
-def get_data_dict(data, ref_columns, imp_columns):
+def get_data_dicts(data, ref_columns, imp_columns):
     """
     Generates Fingerprint dictionary
 
@@ -96,6 +96,81 @@ def get_data_dict(data, ref_columns, imp_columns):
     Fingerprints : array
         Fingerprints for all samples (row-wise).
 
+    """
+    data_dict = {}
+    Fingerprints = []
+    for index,row in data.iterrows():
+        data_dict.update({row[ref_columns[0]]:row})
+        Fingerprints.append(row[imp_columns])
+    return data_dict, Fingerprints
+
+def get_fixed_stats(data, ref_column, label_column, cut):
+    """
+    Get Dictionaries for relationships
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Input data.
+    ref_columns : list of str
+        Identifier columns for the sample.
+    label_column : str
+        Column used as fixed references.
+    cut : int
+        Cutoff for pred-istirbuted samples.
+
+    Returns
+    -------
+    dict_fix_to_label : dict
+        Dictionary for fixed references to label.
+    dict_label_to_fix : dict
+        Dictionary for label to references column.
+    dict_fix_to_fingerprint : dict
+        Dictionary for references column to fingerprint.
+    labels_cut : list of str
+        Samples to be pre-distributed.
+    """
+    
+    # B = dict_fix_to_label
+    dict_fix_to_label = {}
+    for ID in data[label_column].values:
+        dict_fix_to_label.update({ID:data[data[label_column]==ID][ref_column].values})
+    # C = dict_label_to_fix
+    dict_label_to_fix = {}
+    for ID in data[label_column].values:
+        for item in data[data[label_column]==ID][ref_column].values:
+            dict_label_to_fix.update({item:ID})
+      
+    # A = dict_fix_to_fingerprint
+    dict_fix_to_fingerprint = {}
+    # D = labels_cut
+    labels_cut = []
+    
+    for key in np.unique(data[label_column].values):
+        dict_fix_to_fingerprint.update({key:len(data[data[label_column]==key][label_column].values)})
+        if len(data[data[label_column]==key][label_column].values) >= cut:
+            labels_cut.append(key)
+    
+    return dict_fix_to_label, dict_label_to_fix, dict_fix_to_fingerprint, labels_cut
+
+# Read data: add tsv, csv and xlsx
+def get_data_dict(data, ref_columns, imp_columns):
+    """
+    Generates Fingerprint dictionary
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Input data.
+    ref_columns : list of str
+        Identifier columns for the sample.
+    imp_columns : list of str
+        Features used for Fingerprint determination.
+    Returns
+    -------
+    data_dict : dict
+        Dictionary containing the data with ref_columns[0] as key.
+    Fingerprints : array
+        Fingerprints for all samples (row-wise).
     """
     data_dict = {}
     Fingerprints = []
@@ -142,7 +217,6 @@ def get_Fingerprint(data_dict, Fingerprints, imp_columns):
                 a.append(key)
         
         Fingerprints_list.append(shuffle(np.asarray(a)))
-        
     num_Fingerprint = np.asarray([len(item) for item in Fingerprints_list])
     return Fingerprint_IDs, Fingerprints_list, num_Fingerprint
 
@@ -280,7 +354,7 @@ def distribute_References(Plates_overlap, Reference_1, Reference_2, num_wells, n
         Plates_final.append(shuffle(np.concatenate((plate,Ref_1,Ref_2,Blanks))))
     return Plates_final
 
-def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_columns, remaining_columns, Reference_1, Reference_2, out_file="Out.txt"):
+def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_columns, remaining_columns, Reference_1, Reference_2, out_file="Out.txt", label_column = None):
     """
     Write Output file (tab-separated)
 
@@ -321,6 +395,9 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
         for column in imp_columns:
             file.write("%s" %column)
             file.write(sep)
+        if label_column:
+            file.write("%s" %label_column[0])
+            file.write(sep)
         if remaining_columns==[]:        
             file.write("\n")
         else:
@@ -340,10 +417,6 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                     try:
                         check = data_dict[el]
                     except:
-                        #try:
-                        #    check = data_dict[float(el)]
-                        #    el = float(el)
-                        #except:
                         check = data_dict[int(float(el))]
                         el = int(float(el))
                 if el == Reference_1:
@@ -356,20 +429,13 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                     file.write(str(el))
                 file.write(sep)
                 file.write("1"+sep)
-                #if (el != Reference_1) & (el != Reference_2) & (el != "Blank"):
-                #    try:
-                #        check = data_dict[el]
-                #    except:
-                #        try:
-                #            check = data_dict[float(el)]
-                #            el = float(el)
-                #        except:
-                #            check = data_dict[int(float(el))]
-                #            el = int(float(el))
                 if el == Reference_1:
                     for i in range(len(ref_columns)):
                         file.write(Reference_1+"_{:03}".format(c_Ref_1)+sep)
                     for i in range(len(imp_columns)):
+                        file.write("QC_1")
+                        file.write(sep)
+                    if label_column:
                         file.write("QC_1")
                         file.write(sep)
                     c_Ref_1+=1
@@ -379,11 +445,17 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                     for i in range(len(imp_columns)):
                         file.write("QC_2")
                         file.write(sep)
+                    if label_column:
+                        file.write("QC_2")
+                        file.write(sep)
                     c_Ref_2+=1
                 elif el == "Blank":
                     for i in range(len(ref_columns)):
                         file.write("Blank_"+"{:03}".format(c_Blank)+sep)
                     for i in range(len(imp_columns)):
+                        file.write("Blank")
+                        file.write(sep)
+                    if label_column:
                         file.write("Blank")
                         file.write(sep)
                     c_Blank+=1
@@ -393,6 +465,9 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                         file.write(sep)
                     for column in imp_columns:
                         file.write("%s" %data_dict[el][column])
+                        file.write(sep)
+                    if label_column:
+                        file.write("%s" %data_dict[el][label_column[0]])
                         file.write(sep)
                 if remaining_columns==[]:        
                     file.write("\n")
@@ -440,9 +515,6 @@ def get_Statistics(data_dict, Fingerprint_IDs, Plates_final, imp_columns):
                 check = data_dict[el]
             except:
                 #try:
-                #    check = data_dict[float(el)]
-                #    el = float(el)
-                #except:
                 try:
                     check = data_dict[int(float(el))]
                     el = int(float(el))
@@ -559,7 +631,7 @@ def read_plates(imp_columns, in_file="Out.txt", rows="Analysis.Row", columns="An
     Fingerprint_IDs = np.unique(Fingerprints,axis=0)
     return data, Fingerprint_IDs
 
-def plot_PlateLayout(data, ref_column, imp_columns, Fingerprint_IDs, num_rows, num_columns, num_plates, out_file):
+def plot_PlateLayout(data, ref_column, imp_columns, Fingerprint_IDs, num_rows, num_columns, num_plates, out_file, label_column=None):
     """
     Plot the plate layout
 
@@ -673,8 +745,111 @@ def plot_PlateLayout(data, ref_column, imp_columns, Fingerprint_IDs, num_rows, n
         ax.set_ylim(-.5,num_rows-.5)
         ax.grid(which="minor",linestyle="--")  
         ax.set_title("Plate "+str(k+1),fontsize=fs)
-        plt.savefig(out_file+str(k+1)+".png")  
-    return
+        plt.savefig(out_file+str(k+1)+".png")
+
+    if label_column:
+        Plates=np.zeros((num_rows,num_columns,num_plates),dtype="U25")
+        for index,row in data.iterrows():
+            Plates[dict_alph2num[row["Analysis.Row"]],int(row["Analysis.Column"])-1,int(row["Analysis.Plate"])-1] = row[label_column]
+
+        for k in range(0,num_plates):
+            fig,ax = plt.subplots()
+            fig.set_size_inches(20,8)
+            rows = np.arange(num_rows-1,-1,-1)
+            columns = np.arange(0,num_columns)
+            
+            for i, row in enumerate(rows):
+                for j, column in enumerate(columns):
+                    c = Plates[i,j,k]
+                    ax.text(column, row,c,va="center",ha="center")
+            
+            ax.imshow(Plates_color[::-1,:,k],cmap=cmap,aspect=.5, vmin=c_min, vmax=c_max)
+            
+            ax.set_xticks(columns)
+            ax.set_xticks(columns-.5, minor=True)
+            ax.set_xticklabels(np.int_(columns)+1,fontsize=fs)
+            ax.set_yticks(rows)
+            ax.set_yticks(rows-.5, minor=True)
+            ax.set_yticklabels([dict_num2alph[item] for item in rows][::-1],fontsize=fs)
+            ax.set_xlim(-.5,num_columns-.5)
+            ax.set_ylim(-.5,num_rows-.5)
+            ax.grid(which="minor",linestyle="--")  
+            ax.set_title("Plate "+str(k+1),fontsize=fs)
+            plt.savefig(out_file+str(k+1)+"_label.png")  
+        return
+
+def get_num_Fingerprint(Fingerprints_list, num_wells_to_fill, dict_fix_to_fingerprint):
+    num_Fingerprint = np.asarray([np.sum(np.asarray([dict_fix_to_fingerprint[key] for key in item])) for item in Fingerprints_list])
+    num_plates = int(np.ceil(np.sum(num_Fingerprint)/num_wells_to_fill))
+    return num_Fingerprint, num_plates
+
+def distribute_samples_fixed(Fingerprints_list, data_dict, num_plates, dict_fix_to_label, labels_cut, num_wells, num_References, num_Blanks):
+    Repeat = True
+    while Repeat:        
+        Fingerprints_list_new = [shuffle([item for item in fingerprint if item not in labels_cut]) for fingerprint in Fingerprints_list]           
+        ## Determine how many per plate (floor)
+        num_Sample_per_plate = np.int_(np.floor(np.asarray([len(item) for item in Fingerprints_list_new])/num_plates))
+        ## Determine how many are too large (mod)
+        num_Samples_overlap = np.int_(np.mod(np.asarray([len(item) for item in Fingerprints_list_new]),num_plates))
+        
+        Plates = []
+        labels_cut = shuffle(np.asarray(labels_cut))
+        
+        for i in range(num_plates):
+            plate = np.asarray(labels_cut[i::num_plates])            
+            for ind,fingerprint in enumerate(Fingerprints_list_new):
+                ## Cut at pre-determined cut
+                plate = np.concatenate((plate,fingerprint[i*num_Sample_per_plate[ind]:(i+1)*num_Sample_per_plate[ind]]))
+            Plates.append(plate)
+        
+        Distributed_samples = [item for plate in Plates for item in plate]
+        All_samples = [key for key in dict_fix_to_label]
+            
+        ## Distribute remaining data points        
+        Overlap = [item for item in All_samples if item not in Distributed_samples]        
+        Overlap = shuffle(Overlap)
+        Plates_step = [[el for item in plate for el in dict_fix_to_label[item]] for plate in Plates]
+        
+        if all(np.asarray([len(plate) for plate in Plates_step]) <= num_wells-num_References-num_Blanks):
+            c=0
+            b=0
+            while c<len(Overlap):
+                Plates_step = [[el for item in plate for el in dict_fix_to_label[item]] for plate in Plates]
+                for ind,plate in enumerate(Plates):
+                    if len(Plates_step[ind]) + len(dict_fix_to_label[Overlap[c]]) <= num_wells-num_Blanks-num_References:
+                        Plates[ind]=(np.concatenate((plate,[Overlap[c]])))
+                        c+=1
+                    b+=1
+                    if c == len(Overlap):
+                        break
+                if b>=200:
+                    print("failed")
+                    break
+            if c == len(Overlap):    
+                Plates_full = [[el for item in plate for el in dict_fix_to_label[item]] for plate in Plates]
+            else:
+                Plates_full = [np.zeros(100)]
+        else: 
+            Plates_full = [np.zeros(100)]
+        
+        if any(np.asarray([len(plate) for plate in Plates_full]) > num_wells-num_References-num_Blanks):
+            #print(np.asarray([len(plate) for plate in Plates_full]))
+            print("try again")
+        else:
+            Repeat = False
+            
+    Check = np.asarray([item for plate in Plates for item in plate])
+    print("Unique IDs provided: %d" %len(data_dict))
+    print("Unique IDs detected on plates: %d" %len(np.unique(Check)))
+    print("Total IDs on plates: %d" %(np.sum(np.asarray([len(item) for item in Plates]))))
+    print("Unique IDs on plates: %d" %(len(np.unique(np.asarray([el for item in Plates for el in item])))))
+    return Plates_full, Plates
+
+def get_data_dict_fixed(data, ref_columns):
+    data_dict_fixed = {}
+    for index,row in data.iterrows():
+        data_dict_fixed.update({row[ref_columns[0]]:row})
+    return data_dict_fixed
 
 #%%
 
@@ -889,6 +1064,12 @@ class Ui_Form(QtWidgets.QWidget):
         self.label_Seed = QtWidgets.QLabel(self.groupBox_Parameters)
         self.label_Seed.setGeometry(QtCore.QRect(10, 260, 60, 16))
         self.label_Seed.setObjectName("label_Seed")
+        self.checkbox_fix_column = QtWidgets.QCheckBox(self.horizontalLayoutWidget_Seed)
+        self.checkbox_fix_column.setObjectName("checkbox_fix_column")
+        self.horizontalLayout_Seed.addWidget(self.checkbox_fix_column)
+        
+        ### New run procedure
+        ### Modify plotting for label_column
         
         self.groupBox_Output = QtWidgets.QGroupBox(Form)
         self.groupBox_Output.setGeometry(QtCore.QRect(640, 10, 621, 671))
@@ -952,6 +1133,7 @@ class Ui_Form(QtWidgets.QWidget):
         self.pushButton_Run.clicked.connect(self.run_script)
         self.pushButton_Output.clicked.connect(self.set_output_path)
         self.comboBox_Output_Selection.currentIndexChanged.connect(self.show_output)
+        self.checkbox_fix_column.stateChanged.connect(self.state_changed)
         
         sys.stdout = Stream(newText=self.onUpdateText)
         sys.stderr = Stream(newText=self.onUpdateText)
@@ -986,6 +1168,7 @@ class Ui_Form(QtWidgets.QWidget):
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_Relative), _translate("Form", "Relative"))
         
         self.label_Seed.setText(_translate("Form", "Seed"))
+        self.checkbox_fix_column.setText(_translate("Form", "Fix"))
         
         self.groupBox_Output.setTitle(_translate("Form", "Output"))
         self.pushButton_Output.setText(_translate("Form", "Set Output Path"))
@@ -1054,6 +1237,12 @@ class Ui_Form(QtWidgets.QWidget):
         for button in self.buttongroup_output_columns.buttons():
             if button.isChecked():
                 self.output_columns.append(button.text())
+    
+    def get_label_column(self):
+        self.label_column = []
+        for button in self.ui.buttongroup_cutoff.buttons():
+            if button.isChecked():
+                self.label_column.append(button.text())
     
     def scroll_seed(self):
         self.lineEdit_Seed.setText(str(self.horizontalSlider_Seed.value()))
@@ -1137,39 +1326,78 @@ class Ui_Form(QtWidgets.QWidget):
             self.groupBox_Parameters.setStyleSheet("QGroupBox#ColoredGroupBox { border: 1px solid red;}")
             self.raiseError("Parameter selection failed.")
         set_seed(self.seed)
-        try:
-            self.get_columns()
-            self.data_dict, self.Fingerprints = get_data_dict(self.data, self.ref_columns, self.imp_columns)
-            self.Fingerprint_IDs, self.Fingerprints_list, num_Fingerprint = get_Fingerprint(self.data_dict, self.Fingerprints, self.imp_columns)
-            self.num_Fingerprint, self.num_plates, self.num_Sample_per_plate, self.num_Samples_overlap = get_Fingerprint_statistics(self.Fingerprints_list, self.num_wells_to_fill, self.num_plates)
+        if self.checkbox_fix_column.isChecked():
+            try:
+                self.get_columns()
+                self.get_label_column()
+                self.cutoff = int(self.ui.lineEdit_cutoff.text())
+                self.data_dict, self.Fingerprints = get_data_dict(self.data, self.label_column, self.imp_columns)
+                self.dict_fix_to_label, self.dict_label_to_fix, self.dict_fix_to_fingerprint, self.labels_cut = get_fixed_stats(self.data, self.ref_columns[0], self.label_column[0], self.cutoff)
+                self.Fingerprint_IDs, self.Fingerprints_list, self.num_Fingerprint_fixed = get_Fingerprint(self.data_dict, self.Fingerprints, self.imp_columns)
+                print("--------------------")
+                print("Starting Sample Distribution:")
+                self.num_Fingerprint, self.num_plates = get_num_Fingerprint(self.Fingerprints_list, self.num_wells_to_fill, self.dict_fix_to_fingerprint)
+            except:
+                print("ERROR: Input selection or Fingerprint generation failed.")
+                self.groupBox_Input.setObjectName("ColoredGroupBox")  
+                self.groupBox_Input.setStyleSheet("QGroupBox#ColoredGroupBox { border: 1px solid red;}")
+                self.raiseError("Input selection or Fingerprint generation failed.")
+            if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
+                self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_Ref_1+self.num_Ref_2, self.num_Blanks) 
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2)
+            else:
+                self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_References, self.num_Blanks)             
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1)
+            self.data_dict_fixed = get_data_dict_fixed(self.data, self.ref_columns)
             print("--------------------")
-            print("Starting Sample Distribution:")
-        except:
-            print("ERROR: Input selection or Fingerprint generation failed.")
-            self.groupBox_Input.setObjectName("ColoredGroupBox")  
-            self.groupBox_Input.setStyleSheet("QGroupBox#ColoredGroupBox { border: 1px solid red;}")
-            self.raiseError("Input selection or Fingerprint generation failed.")
-        self.Plates_overlap = distribute_Samples(self.Fingerprints_list, self.data_dict, self.num_Sample_per_plate, self.num_plates)
-        if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
-            self.Plates_final = distribute_References(self.Plates_overlap, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2)
+            print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
+            generate_Output(self.data_dict_fixed, self.Plates_final, self.ref_columns, self.imp_columns, self.num_columns, self.output_columns, self.Reference_1, self.Reference_2, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText()), label_column=self.label_column) 
+            self.num_Fingerprint_per_plate = get_Statistics(self.data_dict, self.Fingerprint_IDs, self.Plates, self.imp_columns)
+            print_Statistics(self.Fingerprint_IDs, self.Plates_final, self.num_Fingerprint_per_plate, self.Reference_1, self.Reference_2)
+            self.data_out, self.Fingerprint_IDs_plate = read_plates(self.imp_columns, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText()))
+            plot_PlateLayout(self.data_out, self.ref_columns[0], self.imp_columns, self.Fingerprint_IDs_plate, self.num_rows, self.num_columns, self.num_plates, os.path.join(self.lineEdit_Output.text(),"Plate_"), self.label_column[0]) 
+            self.comboBox_Output_Selection.addItems([str(k+1) for k in range(0,self.num_plates)])
+            self.comboBox_Output_Selection.setCurrentText("1")
+            self.save_Summary_fixed()
+            print("--------------------")   
         else:
-            self.Plates_final = distribute_References(self.Plates_overlap, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1)
-        print("--------------------")
-        print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
-        generate_Output(self.data_dict, self.Plates_final, self.ref_columns, self.imp_columns, self.num_columns, self.output_columns, self.Reference_1, self.Reference_2, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())) 
-        self.num_Fingerprint_per_plate = get_Statistics(self.data_dict, self.Fingerprint_IDs, self.Plates_final, self.imp_columns)
-        print_Statistics(self.Fingerprint_IDs, self.Plates_final, self.num_Fingerprint_per_plate, self.Reference_1, self.Reference_2)
-        self.data_out, self.Fingerprint_IDs_plate = read_plates(self.imp_columns, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText()))
-        plot_PlateLayout(self.data_out, self.ref_columns[0], self.imp_columns, self.Fingerprint_IDs_plate, self.num_rows, self.num_columns, self.num_plates, os.path.join(self.lineEdit_Output.text(),"Plate_"))
-        self.comboBox_Output_Selection.addItems([str(k+1) for k in range(0,self.num_plates)])
-        self.comboBox_Output_Selection.setCurrentText("1")
-        self.save_Summary()
-        print("--------------------")
+            try:
+                self.get_columns()
+                self.data_dict, self.Fingerprints = get_data_dict(self.data, self.ref_columns, self.imp_columns)
+                self.Fingerprint_IDs, self.Fingerprints_list, num_Fingerprint = get_Fingerprint(self.data_dict, self.Fingerprints, self.imp_columns)
+                self.num_Fingerprint, self.num_plates, self.num_Sample_per_plate, self.num_Samples_overlap = get_Fingerprint_statistics(self.Fingerprints_list, self.num_wells_to_fill, self.num_plates)
+                print("--------------------")
+                print("Starting Sample Distribution:")
+            except:
+                print("ERROR: Input selection or Fingerprint generation failed.")
+                self.groupBox_Input.setObjectName("ColoredGroupBox")  
+                self.groupBox_Input.setStyleSheet("QGroupBox#ColoredGroupBox { border: 1px solid red;}")
+                self.raiseError("Input selection or Fingerprint generation failed.")
+            self.Plates_overlap = distribute_Samples(self.Fingerprints_list, self.data_dict, self.num_Sample_per_plate, self.num_plates)
+            if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2)
+            else:
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1)
+            print("--------------------")
+            print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
+            generate_Output(self.data_dict, self.Plates_final, self.ref_columns, self.imp_columns, self.num_columns, self.output_columns, self.Reference_1, self.Reference_2, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())) 
+            self.num_Fingerprint_per_plate = get_Statistics(self.data_dict, self.Fingerprint_IDs, self.Plates_final, self.imp_columns)
+            print_Statistics(self.Fingerprint_IDs, self.Plates_final, self.num_Fingerprint_per_plate, self.Reference_1, self.Reference_2)
+            self.data_out, self.Fingerprint_IDs_plate = read_plates(self.imp_columns, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText()))
+            plot_PlateLayout(self.data_out, self.ref_columns[0], self.imp_columns, self.Fingerprint_IDs_plate, self.num_rows, self.num_columns, self.num_plates, os.path.join(self.lineEdit_Output.text(),"Plate_"))
+            self.comboBox_Output_Selection.addItems([str(k+1) for k in range(0,self.num_plates)])
+            self.comboBox_Output_Selection.setCurrentText("1")
+            self.save_Summary()
+            print("--------------------")
     
     def get_preview(self):
         try:
             self.get_columns()
-            data_dict, Fingerprints = get_data_dict(self.data, self.ref_columns, self.imp_columns)
+            if self.checkbox_fix_column.isChecked():
+                self.get_label_column()
+                data_dict, Fingerprints = get_data_dict(self.data, self.label_column, self.imp_columns)
+            else:
+                data_dict, Fingerprints = get_data_dict(self.data, self.ref_columns, self.imp_columns)
             Fingerprint_IDs, Fingerprint_list, num_Fingerprint = get_Fingerprint(data_dict, Fingerprints, self.imp_columns)
             for i in range(len(num_Fingerprint)):
                 if i==0:
@@ -1249,6 +1477,112 @@ class Ui_Form(QtWidgets.QWidget):
                 for index, fingerprint in enumerate(self.Fingerprint_IDs):
                     file.write("#"+str(fingerprint)+":%d\n" %self.num_Fingerprint_per_plate[index,ind_p])   
                 file.write("-----------------------\n")
+                
+    def save_Summary_fixed(self):
+        with open(os.path.join(self.lineEdit_Output.text(),"Summary.txt"),"w") as file:
+            file.write("--------------------\n")
+            file.write("Summary\n")
+            file.write("--------------------\n")
+            file.write("--------------------\n")
+            file.write("Input\n")
+            file.write("--------------------\n")
+            file.write("Chosen Plate Layout: {0}\n".format(self.Plate_layout))
+            file.write("Reference 1: {0}\n".format(self.Reference_1))
+            file.write("Reference 2: {0}\n".format(self.Reference_2))
+            file.write("Number of Blanks: {0}\n".format(self.num_Blanks))
+            file.write("Seed: {0}\n".format(self.seed))
+            if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
+                file.write("Number of Reference 1: {0}\n".format(self.num_Ref_1))
+                file.write("Number of Reference 2: {0}\n".format(self.num_Ref_2))
+            else:
+                file.write("Minimal Number of References: {0}\n".format(self.num_References))
+                file.write("Percentage of Reference 1: {0}\n".format(self.percentage_Ref_1))
+            file.write("Number of Plates: {0:d}\n".format(self.num_plates))
+            file.write("Columns used for Randomisation: ")
+            for ind,imp_column in enumerate(self.imp_columns):
+                file.write(str(imp_column))
+                if ind == len(self.imp_columns)-1:
+                    file.write("\n")
+                else:
+                    file.write(", ")
+            file.write("--------------------\n")
+            file.write("Fingerprint Statistics\n")
+            file.write("--------------------\n")
+            for ind,fingerprint in enumerate(self.Fingerprint_IDs):
+                file.write(str(fingerprint)+": "+str(self.num_Fingerprint_fixed[ind])+"\n")
+            file.write("--------------------\n")
+            file.write("Plate Statistics\n")
+            file.write("--------------------\n")
+            for ind_p,plate in enumerate(self.Plates_final):
+                file.write("Plate "+str(ind_p+1)+"\n")
+                file.write("#"+self.Reference_1+": %d\n" %len(np.where(plate==self.Reference_1)[0]))
+                file.write("#"+self.Reference_2+": %d\n" %len(np.where(plate==self.Reference_2)[0]))
+                file.write("#Blank: %d\n" %len(np.where(plate=="Blank")[0]))
+                for index, fingerprint in enumerate(self.Fingerprint_IDs):
+                    file.write("#"+str(fingerprint)+":%d\n" %self.num_Fingerprint_per_plate[index,ind_p])   
+                file.write("-----------------------\n")
+                
+    def state_changed(self):
+        if self.checkbox_fix_column.isChecked():
+            try:
+                self.Form2 = QtWidgets.QWidget()
+                self.ui = FixedColumn(self.comboBox_Layout.currentText(), self.data.columns)
+                self.ui.setupUi(self.Form2)
+                self.Form2.show()
+            except:
+                self.raiseError("Please select Input File first.")   
+            
+class FixedColumn(Ui_Form):
+    def __init__(self, max_slider, columns):
+        super().__init__()
+        self.max_slider = int(max_slider)
+        self.columns = columns
+    def setupUi(self, Form2):
+        Form2.setObjectName("Form2")
+        Form2.resize(327, 185)
+        self.horizontalSlider_cutoff = QtWidgets.QSlider(Form2)
+        self.horizontalSlider_cutoff.setGeometry(QtCore.QRect(20, 160, 241, 22))
+        self.horizontalSlider_cutoff.setOrientation(QtCore.Qt.Horizontal)
+        self.horizontalSlider_cutoff.setObjectName("horizontalSlider_cutoff")
+        self.horizontalSlider_cutoff.setMaximum(self.max_slider)
+        self.horizontalSlider_cutoff.setSliderPosition(10)
+        self.lineEdit_cutoff = QtWidgets.QLineEdit(Form2)
+        self.lineEdit_cutoff.setGeometry(QtCore.QRect(270, 160, 41, 21))
+        self.lineEdit_cutoff.setObjectName("lineEdit_cutoff")
+        self.lineEdit_cutoff.setText("10")
+        self.scrollArea_Sheets_cutoff = QtWidgets.QScrollArea(Form2)
+        self.scrollArea_Sheets_cutoff.setGeometry(QtCore.QRect(20, 10, 291, 121))
+        self.scrollArea_Sheets_cutoff.setWidgetResizable(True)
+        self.scrollArea_Sheets_cutoff.setObjectName("scrollArea_Sheets_cutoff")
+        self.scrollAreaWidgetContents_cutoff = QtWidgets.QWidget()
+        self.scrollAreaWidgetContents_cutoff.setGeometry(QtCore.QRect(0, 0, 289, 119))
+        self.scrollAreaWidgetContents_cutoff.setObjectName("scrollAreaWidgetContents_Sheets_cutoff")
+        self.scrollArea_Sheets_cutoff.setWidget(self.scrollAreaWidgetContents_cutoff)
+        self.label_Sheets_cutoff = QtWidgets.QLabel(Form2)
+        self.label_Sheets_cutoff.setGeometry(QtCore.QRect(20, 140, 291, 16))
+        self.label_Sheets_cutoff.setObjectName("label_Sheets_cutoff")
+        
+        self.vbox_cutoff = QtWidgets.QVBoxLayout(self)
+        self.buttongroup_cutoff = QtWidgets.QButtonGroup(self, exclusive=True)
+        for i in list(self.columns):
+            self.buttonz = QtWidgets.QCheckBox(str(i),self)
+            self.vbox_cutoff.addWidget(self.buttonz)
+            self.buttongroup_cutoff.addButton(self.buttonz)
+        self.scrollAreaWidgetContents_cutoff.setLayout(self.vbox_cutoff)
+        
+        self.horizontalSlider_cutoff.valueChanged.connect(self.scroll_cutoff)
+
+        self.retranslateUi(Form2)
+        QtCore.QMetaObject.connectSlotsByName(Form2)
+
+    def retranslateUi(self, Form2):
+        _translate = QtCore.QCoreApplication.translate
+        Form2.setWindowTitle(_translate("Form2","Fixed Column"))
+        self.label_Sheets_cutoff.setText(_translate("Form", "Cutoff for pre-distribution"))
+        
+    def scroll_cutoff(self):
+        self.lineEdit_cutoff.setText(str(self.horizontalSlider_cutoff.value()))
+
 
 if __name__ == "__main__":
     import sys
