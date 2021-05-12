@@ -150,7 +150,6 @@ def get_fixed_stats(data, ref_column, label_column, cut):
         dict_fix_to_fingerprint.update({key:len(data[data[label_column]==key][label_column].values)})
         if len(data[data[label_column]==key][label_column].values) >= cut:
             labels_cut.append(key)
-    
     return dict_fix_to_label, dict_label_to_fix, dict_fix_to_fingerprint, labels_cut
 
 # Read data: add tsv, csv and xlsx
@@ -259,6 +258,7 @@ def get_Fingerprint_statistics(Fingerprints_list, num_wells_to_fill, num_plates)
     num_Samples_overlap = np.int_(np.mod(num_Fingerprint,num_plates))
     return num_Fingerprint, num_plates, num_Sample_per_plate, num_Samples_overlap
 
+# Distribute Samples across the plates
 def distribute_Samples(Fingerprints_list, data_dict, num_Sample_per_plate, num_plates):
     """
     Distribute Samples across the plates
@@ -305,6 +305,7 @@ def distribute_Samples(Fingerprints_list, data_dict, num_Sample_per_plate, num_p
     print("Unique IDs detected on plates: %d" %len(np.unique(Check)))
     return Plates_overlap
 
+# Distribute References across the plates
 def distribute_References(Plates_overlap, Reference_1, Reference_2, num_wells, num_Blanks, num_Ref_1=6, num_Ref_2=6, percentage_Ref_1=None):
     """
     Add references and blanks to the plate
@@ -354,6 +355,7 @@ def distribute_References(Plates_overlap, Reference_1, Reference_2, num_wells, n
         Plates_final.append(shuffle(np.concatenate((plate,Ref_1,Ref_2,Blanks))))
     return Plates_final
 
+# Wirte Output-file
 def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_columns, remaining_columns, Reference_1, Reference_2, out_file="Out.txt", label_column = None):
     """
     Write Output file (tab-separated)
@@ -374,6 +376,8 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
         Additional columns to be added to output.
     out_file : str, optional
         Name of the output file. The default is "Out.txt".
+    label_column : list of str, optional
+        List containing the column used for force samples onto one plate. The default is None.
     """
 
     dict_alph, dict_num = get_Dictionaries()
@@ -487,6 +491,7 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                                 file.write("NA\n")
     return
 
+# Get Plate statistics
 def get_Statistics(data_dict, Fingerprint_IDs, Plates_final, imp_columns):
     """
     Get statistics for the plate layout
@@ -514,7 +519,6 @@ def get_Statistics(data_dict, Fingerprint_IDs, Plates_final, imp_columns):
             try:
                 check = data_dict[el]
             except:
-                #try:
                 try:
                     check = data_dict[int(float(el))]
                     el = int(float(el))
@@ -528,6 +532,7 @@ def get_Statistics(data_dict, Fingerprint_IDs, Plates_final, imp_columns):
                     pass
     return num_Fingerprint_per_plate
 
+# Print Plate statistics
 def print_Statistics(Fingerprint_IDs, Plates_final, num_Fingerprint_per_plate, Reference_1, Reference_2):
     """
     Print statistics for every plate.
@@ -559,6 +564,7 @@ def print_Statistics(Fingerprint_IDs, Plates_final, num_Fingerprint_per_plate, R
         print("-----------------------")
     return
 
+# Get Dictionaries Alph <-> Num
 def get_Dictionaries():
     """
     Get dictionaries to translate between numbers and letters
@@ -578,6 +584,7 @@ def get_Dictionaries():
         dict_alph2num.update({alph:num})        
     return dict_num2alph, dict_alph2num
 
+# Read Outputfile for plotting
 def read_plates(imp_columns, in_file="Out.txt", rows="Analysis.Row", columns="Analysis.Column", plate="Analysis.Plate"):
     """
     Read input file as written by generate_Output().
@@ -631,6 +638,7 @@ def read_plates(imp_columns, in_file="Out.txt", rows="Analysis.Row", columns="An
     Fingerprint_IDs = np.unique(Fingerprints,axis=0)
     return data, Fingerprint_IDs
 
+# Plot Plate-layout
 def plot_PlateLayout(data, ref_column, imp_columns, Fingerprint_IDs, num_rows, num_columns, num_plates, out_file, label_column=None):
     """
     Plot the plate layout
@@ -653,6 +661,8 @@ def plot_PlateLayout(data, ref_column, imp_columns, Fingerprint_IDs, num_rows, n
         Number of plates.
     out_file : str
         Name of the output file.
+    label_column : str, optional
+        Name of the column that was used to force samples onto the same plate. The default is None.
     """
     
     dict_num2alph, dict_alph2num = get_Dictionaries()
@@ -778,12 +788,64 @@ def plot_PlateLayout(data, ref_column, imp_columns, Fingerprint_IDs, num_rows, n
             plt.savefig(out_file+str(k+1)+"_label.png")  
         return
 
+# Get Number of Fingerprints for forced samples
 def get_num_Fingerprint(Fingerprints_list, num_wells_to_fill, dict_fix_to_fingerprint):
+    """
+    Get Number of Fingerprints with forcing samples onto one plate.
+
+    Parameters
+    ----------
+    Fingerprints_list : list of str
+        Samples assigned to each Fingerprint.
+    num_wells_to_fill : int
+        Maximal number of wells to be filled per plate.
+    dict_fix_to_fingerprint : dict
+        Dictionary for references column to fingerprint.
+
+    Returns
+    -------
+    num_Fingerprint : array
+        Number of samples per fingerprint
+    num_plates : int
+        Final number of plates.
+    """
+    
     num_Fingerprint = np.asarray([np.sum(np.asarray([dict_fix_to_fingerprint[key] for key in item])) for item in Fingerprints_list])
     num_plates = int(np.ceil(np.sum(num_Fingerprint)/num_wells_to_fill))
     return num_Fingerprint, num_plates
 
+# Distribute samples with forcing samples onto the same plate
 def distribute_samples_fixed(Fingerprints_list, data_dict, num_plates, dict_fix_to_label, labels_cut, num_wells, num_References, num_Blanks):
+    """
+    Distribute samples forcing samples of same identifier onto the same plate.
+
+    Parameters
+    ----------
+    Fingerprints_list : list of str
+        Samples assigned to each Fingerprint.
+    data_dict : dict
+        Dictionary containing the data with ref_columns[0] as key.
+    num_plates : int
+        Final number of plates.
+    dict_fix_to_label : dict
+        Dictionary for fixed references to label.
+    labels_cut : list of str
+        Samples to be pre-distributed.
+    num_wells : int
+        Number of wells per plate.
+    num_References : int
+        Number of References.
+    num_Blanks : int
+        Number of blanks to be included per plate.
+
+    Returns
+    -------
+    Plates_full : list of arrays
+        Samples distributed over num_plates plates.
+    Plates : list of arrays
+        Samples distributed over num_plates plates. Identifier used for fixing data onto plates.
+    """
+
     Repeat = True
     while Repeat:        
         Fingerprints_list_new = [shuffle([item for item in fingerprint if item not in labels_cut]) for fingerprint in Fingerprints_list]           
@@ -845,7 +907,24 @@ def distribute_samples_fixed(Fingerprints_list, data_dict, num_plates, dict_fix_
     print("Unique IDs on plates: %d" %(len(np.unique(np.asarray([el for item in Plates for el in item])))))
     return Plates_full, Plates
 
+# Dictionary for data if samples were forced
 def get_data_dict_fixed(data, ref_columns):
+    """
+    Generate dictionary for forced samples.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Input data.
+    ref_columns : list of str
+        Identifier columns for the sample.
+
+    Returns
+    -------
+    data_dict : dict
+        Dictionary containing the data with ref_columns[0] as key.
+    """
+    
     data_dict_fixed = {}
     for index,row in data.iterrows():
         data_dict_fixed.update({row[ref_columns[0]]:row})
@@ -1067,9 +1146,6 @@ class Ui_Form(QtWidgets.QWidget):
         self.checkbox_fix_column = QtWidgets.QCheckBox(self.horizontalLayoutWidget_Seed)
         self.checkbox_fix_column.setObjectName("checkbox_fix_column")
         self.horizontalLayout_Seed.addWidget(self.checkbox_fix_column)
-        
-        ### New run procedure
-        ### Modify plotting for label_column
         
         self.groupBox_Output = QtWidgets.QGroupBox(Form)
         self.groupBox_Output.setGeometry(QtCore.QRect(640, 10, 621, 671))
@@ -1410,7 +1486,6 @@ class Ui_Form(QtWidgets.QWidget):
     def show_output(self):
         k = self.comboBox_Output_Selection.currentText()
         self.pixmap = QtGui.QPixmap(os.path.join(self.lineEdit_Output.text(),"Plate_"+str(k)+".png"))
-        #.scaledToWidth(400)
         self.Pixmap_Output.setPixmap(self.pixmap)
         
     def onUpdateText(self, text):
