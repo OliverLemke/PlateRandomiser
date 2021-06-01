@@ -402,6 +402,10 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
         if label_column:
             file.write("%s" %label_column[0])
             file.write(sep)
+            remaining_columns = [column for column in remaining_columns if column not in label_column]
+        
+        remaining_columns = [column for column in remaining_columns if (column not in ref_columns) & (column not in imp_columns)]
+        
         if remaining_columns==[]:        
             file.write("\n")
         else:
