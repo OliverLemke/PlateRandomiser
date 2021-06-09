@@ -13,7 +13,12 @@ import Color_Mix
 import matplotlib.pyplot as plt
 from matplotlib import colors
 import os
+from sklearn.metrics.pairwise import manhattan_distances, euclidean_distances
 
+### To Do
+# Add forbidden/fixed wells
+# Add forbidden neighboring
+# Add optimization for constraint layout
 
 # Select plate Layout
 def get_Plate_layout(Plate_layout, num_Blanks, num_References=None, num_Ref_1=None, num_Ref_2=None):
@@ -282,7 +287,7 @@ def distribute_Samples(Fingerprints_list, data_dict, num_Sample_per_plate, num_p
     
     Plates = []
     for i in range(num_plates):
-        plate = np.asarray([])
+        plate = np.asarray([], dtype='<U25')
         for ind,fingerprint in enumerate(Fingerprints_list):
             ## Cut at pre-determined cut
             plate = np.concatenate((plate,fingerprint[i*num_Sample_per_plate[ind]:(i+1)*num_Sample_per_plate[ind]]))
@@ -306,7 +311,7 @@ def distribute_Samples(Fingerprints_list, data_dict, num_Sample_per_plate, num_p
     return Plates_overlap
 
 # Distribute References across the plates
-def distribute_References(Plates_overlap, Reference_1, Reference_2, num_wells, num_Blanks, num_Ref_1=6, num_Ref_2=6, percentage_Ref_1=None):
+def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Reference_2, num_wells, num_Blanks, num_Ref_1=6, num_Ref_2=6, percentage_Ref_1=None):
     """
     Add references and blanks to the plate
 
@@ -314,6 +319,8 @@ def distribute_References(Plates_overlap, Reference_1, Reference_2, num_wells, n
     ----------
     Plates_overlap : list of arrays
         Samples distributed num_plates over plates.
+    Fingerprints_list : list of str
+        Samples assigned to each Fingerprint.
     Reference_1 : str
         Label of Reference 1.
     Reference_2 : str
@@ -351,9 +358,50 @@ def distribute_References(Plates_overlap, Reference_1, Reference_2, num_wells, n
             num_Blanks += int(num_wells-len(plate)-num_Blanks-num_Ref_1-num_Ref_2)
         Ref_1 = np.asarray([Reference_1]*num_Ref_1)
         Ref_2 = np.asarray([Reference_2]*num_Ref_2)
-        Blanks = np.asarray(["Blank"]*num_Blanks)    
-        Plates_final.append(shuffle(np.concatenate((plate,Ref_1,Ref_2,Blanks))))
+        Blanks = np.asarray(["Blank"]*num_Blanks) 
+        plate = shuffle(np.concatenate((plate,Ref_1,Ref_2,Blanks)))
+        #"""
+        score = len(plate)**2
+        for i in range(500):
+            plate = shuffle(plate)
+            score_eval = evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2)
+            if score_eval <= score:
+                score = score_eval
+                print(i)
+                print(score)
+                plate_final = plate
+        Plates_final.append(plate_final)
+        #"""
+        
+        #Plates_final.append(plate)
     return Plates_final
+# return score
+# implement score for fixed
+
+def evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2):
+    score = 0
+    if len(plate)==96:
+        num_columns = 12
+    elif len(plate)==384:
+        num_columns = 24
+    for el in Fingerprints_list:
+        coord = np.asarray([[int(ind/num_columns),np.mod(ind,num_columns)] for ind,item in enumerate(plate) if item in el.astype("U25")])
+        try:
+            score += (np.sum(np.exp(-1*manhattan_distances(coord)))-len(coord))/2
+        except:
+            pass
+    coord = np.asarray([[int(ind/num_columns),np.mod(ind,num_columns)] for ind,item in enumerate(plate) if item == Reference_1])
+    try:
+        score += (np.sum(np.exp(-1*manhattan_distances(coord)))-len(coord))/2
+    except:
+        pass
+    coord = np.asarray([[int(ind/num_columns),np.mod(ind,num_columns)] for ind,item in enumerate(plate) if item == Reference_2])
+    try:
+        score += (np.sum(np.exp(-1*manhattan_distances(coord)))-len(coord))/2
+    except:
+        pass
+    return score
+    ##### negative exp ### exp(-D)
 
 # Wirte Output-file
 def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_columns, remaining_columns, Reference_1, Reference_2, out_file="Out.txt", label_column = None):
@@ -1424,10 +1472,10 @@ class Ui_Form(QtWidgets.QWidget):
                 self.raiseError("Input selection or Fingerprint generation failed.")
             if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
                 self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_Ref_1+self.num_Ref_2, self.num_Blanks) 
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list. self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2)
             else:
                 self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_References, self.num_Blanks)             
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1)
             self.data_dict_fixed = get_data_dict_fixed(self.data, self.ref_columns)
             print("--------------------")
             print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
@@ -1455,9 +1503,9 @@ class Ui_Form(QtWidgets.QWidget):
                 self.raiseError("Input selection or Fingerprint generation failed.")
             self.Plates_overlap = distribute_Samples(self.Fingerprints_list, self.data_dict, self.num_Sample_per_plate, self.num_plates)
             if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2)
             else:
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1)
             print("--------------------")
             print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
             generate_Output(self.data_dict, self.Plates_final, self.ref_columns, self.imp_columns, self.num_columns, self.output_columns, self.Reference_1, self.Reference_2, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())) 
