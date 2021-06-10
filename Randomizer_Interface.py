@@ -18,7 +18,9 @@ from sklearn.metrics.pairwise import manhattan_distances, euclidean_distances
 ### To Do
 # Add forbidden/fixed wells
 # Add forbidden neighboring
-# Add optimization for constraint layout
+
+# Name
+# Icon
 
 # Select plate Layout
 def get_Plate_layout(Plate_layout, num_Blanks, num_References=None, num_Ref_1=None, num_Ref_2=None):
@@ -311,7 +313,7 @@ def distribute_Samples(Fingerprints_list, data_dict, num_Sample_per_plate, num_p
     return Plates_overlap
 
 # Distribute References across the plates
-def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Reference_2, num_wells, num_Blanks, num_Ref_1=6, num_Ref_2=6, percentage_Ref_1=None):
+def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Reference_2, num_wells, num_Blanks, num_Ref_1=6, num_Ref_2=6, percentage_Ref_1=None, dict_fix_to_label=None):
     """
     Add references and blanks to the plate
 
@@ -360,23 +362,38 @@ def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Refere
         Ref_2 = np.asarray([Reference_2]*num_Ref_2)
         Blanks = np.asarray(["Blank"]*num_Blanks) 
         plate = shuffle(np.concatenate((plate,Ref_1,Ref_2,Blanks)))
-        #"""
         score = len(plate)**2
-        for i in range(500):
+        for i in range(250):
             plate = shuffle(plate)
             score_eval = evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2)
+            if dict_fix_to_label:
+                score_label = evaluate_plate_layout_fixed(plate,dict_fix_to_label)
+                score_eval = (score_eval+score_label)/2
             if score_eval <= score:
                 score = score_eval
                 print(i)
                 print(score)
                 plate_final = plate
         Plates_final.append(plate_final)
-        #"""
-        
-        #Plates_final.append(plate)
     return Plates_final
-# return score
-# implement score for fixed
+
+def evaluate_plate_layout_fixed(plate,dict_fix_to_label):
+    score = 0
+    if len(plate)==96:
+        num_columns = 12
+    elif len(plate)==384:
+        num_columns = 24
+    for key in dict_fix_to_label:
+        coord = np.asarray([[int(ind/num_columns),np.mod(ind,num_columns)] for ind,item in enumerate(plate) if item.astype("U25") in dict_fix_to_label[key].astype("U25")])
+        try:
+            score += (np.sum(np.exp(-1/len(coord)*manhattan_distances(coord)))-len(coord))/2
+        except:
+            pass
+    return score
+
+def get_Fingerprints_list_full_fixed(Fingerprints_list, dict_fix_to_label):
+    Fingerprints_list_full = [np.asarray([el for key in item for el in dict_fix_to_label[key]]) for item in Fingerprints_list]
+    return Fingerprints_list_full
 
 def evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2):
     score = 0
@@ -385,7 +402,7 @@ def evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2):
     elif len(plate)==384:
         num_columns = 24
     for el in Fingerprints_list:
-        coord = np.asarray([[int(ind/num_columns),np.mod(ind,num_columns)] for ind,item in enumerate(plate) if item in el.astype("U25")])
+        coord = np.asarray([[int(ind/num_columns),np.mod(ind,num_columns)] for ind,item in enumerate(plate) if item.astype("U25") in el.astype("U25")])
         try:
             score += (np.sum(np.exp(-1*manhattan_distances(coord)))-len(coord))/2
         except:
@@ -1465,6 +1482,7 @@ class Ui_Form(QtWidgets.QWidget):
                 print("--------------------")
                 print("Starting Sample Distribution:")
                 self.num_Fingerprint, self.num_plates = get_num_Fingerprint(self.Fingerprints_list, self.num_wells_to_fill, self.dict_fix_to_fingerprint)
+                self.Fingerprints_list_full = get_Fingerprints_list_full_fixed(self.Fingerprints_list, self.dict_fix_to_label)
             except:
                 print("ERROR: Input selection or Fingerprint generation failed.")
                 self.groupBox_Input.setObjectName("ColoredGroupBox")  
@@ -1472,10 +1490,10 @@ class Ui_Form(QtWidgets.QWidget):
                 self.raiseError("Input selection or Fingerprint generation failed.")
             if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
                 self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_Ref_1+self.num_Ref_2, self.num_Blanks) 
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list. self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, dict_fix_to_label=self.dict_fix_to_label)
             else:
                 self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_References, self.num_Blanks)             
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, dict_fix_to_label=self.dict_fix_to_label)
             self.data_dict_fixed = get_data_dict_fixed(self.data, self.ref_columns)
             print("--------------------")
             print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
@@ -1537,8 +1555,12 @@ class Ui_Form(QtWidgets.QWidget):
             
     def show_output(self):
         k = self.comboBox_Output_Selection.currentText()
-        self.pixmap = QtGui.QPixmap(os.path.join(self.lineEdit_Output.text(),"Plate_"+str(k)+".png"))
-        self.Pixmap_Output.setPixmap(self.pixmap)
+        if self.checkbox_fix_column.isChecked():
+            self.pixmap = QtGui.QPixmap(os.path.join(self.lineEdit_Output.text(),"Plate_"+str(k)+"_label.png"))
+            self.Pixmap_Output.setPixmap(self.pixmap)            
+        else:
+            self.pixmap = QtGui.QPixmap(os.path.join(self.lineEdit_Output.text(),"Plate_"+str(k)+".png"))
+            self.Pixmap_Output.setPixmap(self.pixmap)
         
     def onUpdateText(self, text):
         cursor = self.plainTextEdit_Output.textCursor()
