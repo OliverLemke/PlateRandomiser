@@ -312,7 +312,7 @@ def distribute_Samples(Fingerprints_list, data_dict, num_Sample_per_plate, num_p
     return Plates_overlap
 
 # Distribute References across the plates
-def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Reference_2, num_wells, num_Blanks, num_Ref_1=6, num_Ref_2=6, percentage_Ref_1=None, dict_fix_to_label=None):
+def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Reference_2, num_wells, num_Blanks, num_Ref_1=6, num_Ref_2=6, percentage_Ref_1=None, dict_fix_to_label=None, optimize=False):
     """
     Add references and blanks to the plate
 
@@ -336,6 +336,8 @@ def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Refere
         Number of Reference 2 (needed if num_References is not defined). The default is 6.
     percentage_Ref_1 : float, optional
         Percentage of Reference 1 (needed if num_Ref_1 and num_Ref_2 are not defined). The default is None.
+    optimize: bool, optional
+        Performance of optimization. The default is False.
 
     Returns
     -------
@@ -360,23 +362,26 @@ def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Refere
         Ref_1 = np.asarray([Reference_1]*num_Ref_1)
         Ref_2 = np.asarray([Reference_2]*num_Ref_2)
         Blanks = np.asarray(["Blank"]*num_Blanks) 
-        plate = shuffle(np.concatenate((plate,Ref_1,Ref_2,Blanks)))
-        score = len(plate)**2
-        for i in range(250):
-            plate = shuffle(plate)
-            score_eval = evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2)
-            if dict_fix_to_label:
-                score_label = evaluate_plate_layout_fixed(plate,dict_fix_to_label)
-                score_eval = (score_eval+score_label)/2
-            if score_eval <= score:
-                score = score_eval
-                print(i)
-                print(score)
-                plate_final = plate
+        plate = np.concatenate((plate,Ref_1,Ref_2,Blanks))
+        if optimize:
+            score = len(plate)**2
+            for i in range(250):
+                plate = shuffle(plate)
+                score_eval = evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2)
+                if dict_fix_to_label:
+                    score_label = evaluate_plate_layout_fixed(plate,dict_fix_to_label)
+                    score_eval = (score_eval+score_label)/2
+                if score_eval <= score:
+                    score = score_eval
+                    print(i)
+                    print(score)
+                    plate_final = plate
+        else:
+            plate_final = shuffle(plate)
         Plates_final.append(plate_final)
     return Plates_final
 
-def evaluate_plate_layout_fixed(plate,dict_fix_to_label):
+def evaluate_plate_layout_fixed(plate, dict_fix_to_label):
     score = 0
     if len(plate)==96:
         num_columns = 12
@@ -1286,7 +1291,7 @@ class Ui_Form(QtWidgets.QWidget):
         self.pushButton_Run.clicked.connect(self.run_script)
         self.pushButton_Output.clicked.connect(self.set_output_path)
         self.comboBox_Output_Selection.currentIndexChanged.connect(self.show_output)
-        self.checkbox_fix_column.stateChanged.connect(self.state_changed)
+        self.checkbox_fix_column.stateChanged.connect(self.state_changed_group)
         
         sys.stdout = Stream(newText=self.onUpdateText)
         sys.stderr = Stream(newText=self.onUpdateText)
@@ -1469,6 +1474,7 @@ class Ui_Form(QtWidgets.QWidget):
         self.groupBox_Parameters.setStyleSheet(self.style_reset)
         self.groupBox_Input.setStyleSheet(self.style_reset)
         self.comboBox_Output_Selection.clear()
+        self.optimize = False
         try:
             self.get_Input()
             if self.num_wells_to_fill <= 0:
@@ -1482,6 +1488,8 @@ class Ui_Form(QtWidgets.QWidget):
             self.groupBox_Parameters.setStyleSheet("QGroupBox#ColoredGroupBox { border: 1px solid red;}")
             self.raiseError("Parameter selection failed.")
         set_seed(self.seed)
+        if self.checkbox_optimize.isChecked():
+            self.optimize = True
         if self.checkbox_fix_column.isChecked():
             try:
                 self.get_columns()
@@ -1501,10 +1509,10 @@ class Ui_Form(QtWidgets.QWidget):
                 self.raiseError("Input selection or Fingerprint generation failed.")
             if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
                 self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_Ref_1+self.num_Ref_2, self.num_Blanks) 
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, dict_fix_to_label=self.dict_fix_to_label)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize)
             else:
                 self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_References, self.num_Blanks)             
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, dict_fix_to_label=self.dict_fix_to_label)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize)
             self.data_dict_fixed = get_data_dict_fixed(self.data, self.ref_columns)
             print("--------------------")
             print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
@@ -1532,9 +1540,9 @@ class Ui_Form(QtWidgets.QWidget):
                 self.raiseError("Input selection or Fingerprint generation failed.")
             self.Plates_overlap = distribute_Samples(self.Fingerprints_list, self.data_dict, self.num_Sample_per_plate, self.num_plates)
             if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, optimize=self.optimize)
             else:
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, optimize=self.optimize)
             print("--------------------")
             print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
             generate_Output(self.data_dict, self.Plates_final, self.ref_columns, self.imp_columns, self.num_columns, self.output_columns, self.Reference_1, self.Reference_2, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())) 
@@ -1682,7 +1690,7 @@ class Ui_Form(QtWidgets.QWidget):
                     file.write("#"+str(fingerprint)+":%d\n" %self.num_Fingerprint_per_plate[index,ind_p])   
                 file.write("-----------------------\n")
                 
-    def state_changed(self):
+    def state_changed_group(self):
         if self.checkbox_fix_column.isChecked():
             try:
                 self.Form2 = QtWidgets.QWidget()
