@@ -13,11 +13,10 @@ import Color_Mix
 import matplotlib.pyplot as plt
 from matplotlib import colors
 import os
-from sklearn.metrics.pairwise import manhattan_distances, euclidean_distances
+from sklearn.metrics.pairwise import manhattan_distances
 
 ### To Do
 # Add forbidden/fixed wells
-# Add forbidden neighboring
 
 # Name
 # Icon
@@ -1196,14 +1195,14 @@ class Ui_Form(QtWidgets.QWidget):
         self.horizontalLayoutWidget_Seed.setGeometry(QtCore.QRect(0, 280, 301, 24))
         self.horizontalLayoutWidget_Seed.setObjectName("horizontalLayoutWidget_Seed")
         self.horizontalLayout_Seed = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget_Seed)
-        self.horizontalLayout_Seed.setContentsMargins(0, 0, 0, 0)
+        self.horizontalLayout_Seed.setContentsMargins(10, 0, 10, 0)
         self.horizontalLayout_Seed.setObjectName("horizontalLayout_Seed")
-        self.horizontalSlider_Seed = QtWidgets.QSlider(self.horizontalLayoutWidget_Seed)
-        self.horizontalSlider_Seed.setMaximum(99999)
-        self.horizontalSlider_Seed.setSliderPosition(42)
-        self.horizontalSlider_Seed.setOrientation(QtCore.Qt.Horizontal)
-        self.horizontalSlider_Seed.setObjectName("horizontalSlider_Seed")
-        self.horizontalLayout_Seed.addWidget(self.horizontalSlider_Seed)
+        #self.horizontalSlider_Seed = QtWidgets.QSlider(self.horizontalLayoutWidget_Seed)
+        #self.horizontalSlider_Seed.setMaximum(99999)
+        #self.horizontalSlider_Seed.setSliderPosition(42)
+        #self.horizontalSlider_Seed.setOrientation(QtCore.Qt.Horizontal)
+        #self.horizontalSlider_Seed.setObjectName("horizontalSlider_Seed")
+        #self.horizontalLayout_Seed.addWidget(self.horizontalSlider_Seed)
         self.lineEdit_Seed = QtWidgets.QLineEdit(self.horizontalLayoutWidget_Seed)
         self.lineEdit_Seed.setObjectName("lineEdit_Seed")
         self.lineEdit_Seed.setText("42")
@@ -1215,6 +1214,15 @@ class Ui_Form(QtWidgets.QWidget):
         self.checkbox_fix_column = QtWidgets.QCheckBox(self.horizontalLayoutWidget_Seed)
         self.checkbox_fix_column.setObjectName("checkbox_fix_column")
         self.horizontalLayout_Seed.addWidget(self.checkbox_fix_column)
+        self.checkbox_optimize = QtWidgets.QCheckBox(self.horizontalLayoutWidget_Seed)
+        self.checkbox_optimize.setObjectName("checkbox_optimize")
+        self.horizontalLayout_Seed.addWidget(self.checkbox_optimize)
+        self.checkbox_exclude = QtWidgets.QCheckBox(self.horizontalLayoutWidget_Seed)
+        self.checkbox_exclude.setObjectName("checkbox_exclude")
+        self.horizontalLayout_Seed.addWidget(self.checkbox_exclude)
+        self.label_Settings = QtWidgets.QLabel(self.groupBox_Parameters)
+        self.label_Settings.setGeometry(QtCore.QRect(131, 260, 60, 16))
+        self.label_Settings.setObjectName("label_Settings")
         
         self.groupBox_Output = QtWidgets.QGroupBox(Form)
         self.groupBox_Output.setGeometry(QtCore.QRect(640, 10, 621, 671))
@@ -1274,7 +1282,7 @@ class Ui_Form(QtWidgets.QWidget):
         self.pushButton_Input.clicked.connect(self.open_file)
         self.pushButton_Recompute.clicked.connect(self.load_sheets)
         self.pushButton_Fingerprints_Preview.clicked.connect(self.get_preview)
-        self.horizontalSlider_Seed.valueChanged.connect(self.scroll_seed)
+        #self.horizontalSlider_Seed.valueChanged.connect(self.scroll_seed)
         self.pushButton_Run.clicked.connect(self.run_script)
         self.pushButton_Output.clicked.connect(self.set_output_path)
         self.comboBox_Output_Selection.currentIndexChanged.connect(self.show_output)
@@ -1313,7 +1321,10 @@ class Ui_Form(QtWidgets.QWidget):
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_Relative), _translate("Form", "Relative"))
         
         self.label_Seed.setText(_translate("Form", "Seed"))
-        self.checkbox_fix_column.setText(_translate("Form", "Fix"))
+        self.label_Settings.setText(_translate("Form", "Settings"))
+        self.checkbox_fix_column.setText(_translate("Form", "Group"))
+        self.checkbox_optimize.setText(_translate("Form", "Opt."))
+        self.checkbox_exclude.setText(_translate("Form", "Excl."))
         
         self.groupBox_Output.setTitle(_translate("Form", "Output"))
         self.pushButton_Output.setText(_translate("Form", "Set Output Path"))
@@ -1389,8 +1400,8 @@ class Ui_Form(QtWidgets.QWidget):
             if button.isChecked():
                 self.label_column.append(button.text())
     
-    def scroll_seed(self):
-        self.lineEdit_Seed.setText(str(self.horizontalSlider_Seed.value()))
+    #def scroll_seed(self):
+    #    self.lineEdit_Seed.setText(str(self.horizontalSlider_Seed.value()))
     
     def read_Input(self):
         if self.scrollAreaWidgetContents_Sheets.layout():
