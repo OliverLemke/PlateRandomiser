@@ -312,7 +312,7 @@ def distribute_Samples(Fingerprints_list, data_dict, num_Sample_per_plate, num_p
     return Plates_overlap
 
 # Distribute References across the plates
-def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Reference_2, num_wells, num_Blanks, num_Ref_1=6, num_Ref_2=6, percentage_Ref_1=None, dict_fix_to_label=None, optimize=False):
+def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Reference_2, num_wells, num_Blanks, num_Ref_1=6, num_Ref_2=6, percentage_Ref_1=None, dict_fix_to_label=None, optimize=False, num_cycles=1):
     """
     Add references and blanks to the plate
 
@@ -338,6 +338,8 @@ def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Refere
         Percentage of Reference 1 (needed if num_Ref_1 and num_Ref_2 are not defined). The default is None.
     optimize: bool, optional
         Performance of optimization. The default is False.
+    num_cycles: int, optional
+        Number of optimization cycles to be performed. The deafult is 1.
 
     Returns
     -------
@@ -365,8 +367,9 @@ def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Refere
         plate = np.concatenate((plate,Ref_1,Ref_2,Blanks))
         if optimize:
             score = len(plate)**2
-            for i in range(250):
+            for i in range(num_cycles):
                 plate = shuffle(plate)
+                ###### add fixed
                 score_eval = evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2)
                 if dict_fix_to_label:
                     score_label = evaluate_plate_layout_fixed(plate,dict_fix_to_label)
@@ -378,6 +381,7 @@ def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Refere
                     plate_final = plate
         else:
             plate_final = shuffle(plate)
+            ###### add fixed
         Plates_final.append(plate_final)
     return Plates_final
 
@@ -1292,6 +1296,7 @@ class Ui_Form(QtWidgets.QWidget):
         self.pushButton_Output.clicked.connect(self.set_output_path)
         self.comboBox_Output_Selection.currentIndexChanged.connect(self.show_output)
         self.checkbox_fix_column.stateChanged.connect(self.state_changed_group)
+        self.checkbox_optimize.stateChanged.connect(self.state_changed_optimize)
         
         sys.stdout = Stream(newText=self.onUpdateText)
         sys.stderr = Stream(newText=self.onUpdateText)
@@ -1401,7 +1406,7 @@ class Ui_Form(QtWidgets.QWidget):
     
     def get_label_column(self):
         self.label_column = []
-        for button in self.ui.buttongroup_cutoff.buttons():
+        for button in self.ui_fix_column.buttongroup_cutoff.buttons():
             if button.isChecked():
                 self.label_column.append(button.text())
     
@@ -1475,6 +1480,7 @@ class Ui_Form(QtWidgets.QWidget):
         self.groupBox_Input.setStyleSheet(self.style_reset)
         self.comboBox_Output_Selection.clear()
         self.optimize = False
+        self.num_cycles = 1
         try:
             self.get_Input()
             if self.num_wells_to_fill <= 0:
@@ -1490,11 +1496,12 @@ class Ui_Form(QtWidgets.QWidget):
         set_seed(self.seed)
         if self.checkbox_optimize.isChecked():
             self.optimize = True
+            self.num_cycles = int(self.ui_optimize.lineEdit_optimize.text())
         if self.checkbox_fix_column.isChecked():
             try:
                 self.get_columns()
                 self.get_label_column()
-                self.cutoff = int(self.ui.lineEdit_cutoff.text())
+                self.cutoff = int(self.ui_fix_column.lineEdit_cutoff.text())
                 self.data_dict, self.Fingerprints = get_data_dict(self.data, self.label_column, self.imp_columns)
                 self.dict_fix_to_label, self.dict_label_to_fix, self.dict_fix_to_fingerprint, self.labels_cut = get_fixed_stats(self.data, self.ref_columns[0], self.label_column[0], self.cutoff)
                 self.Fingerprint_IDs, self.Fingerprints_list, self.num_Fingerprint_fixed = get_Fingerprint(self.data_dict, self.Fingerprints, self.imp_columns)
@@ -1509,10 +1516,10 @@ class Ui_Form(QtWidgets.QWidget):
                 self.raiseError("Input selection or Fingerprint generation failed.")
             if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
                 self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_Ref_1+self.num_Ref_2, self.num_Blanks) 
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize, num_cycles=self.num_cycles)
             else:
                 self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_References, self.num_Blanks)             
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize, num_cycles=self.num_cycles)
             self.data_dict_fixed = get_data_dict_fixed(self.data, self.ref_columns)
             print("--------------------")
             print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
@@ -1540,9 +1547,9 @@ class Ui_Form(QtWidgets.QWidget):
                 self.raiseError("Input selection or Fingerprint generation failed.")
             self.Plates_overlap = distribute_Samples(self.Fingerprints_list, self.data_dict, self.num_Sample_per_plate, self.num_plates)
             if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, optimize=self.optimize)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, optimize=self.optimize, num_cycles=self.num_cycles)
             else:
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, optimize=self.optimize)
+                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, optimize=self.optimize, num_cycles=self.num_cycles)
             print("--------------------")
             print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
             generate_Output(self.data_dict, self.Plates_final, self.ref_columns, self.imp_columns, self.num_columns, self.output_columns, self.Reference_1, self.Reference_2, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())) 
@@ -1694,11 +1701,18 @@ class Ui_Form(QtWidgets.QWidget):
         if self.checkbox_fix_column.isChecked():
             try:
                 self.Form2 = QtWidgets.QWidget()
-                self.ui = FixedColumn(self.comboBox_Layout.currentText(), self.data.columns)
-                self.ui.setupUi(self.Form2)
+                self.ui_fix_column = FixedColumn(self.comboBox_Layout.currentText(), self.data.columns)
+                self.ui_fix_column.setupUi(self.Form2)
                 self.Form2.show()
             except:
                 self.raiseError("Please select Input File first.")   
+    
+    def state_changed_optimize(self):
+        if self.checkbox_optimize.isChecked():
+            self.Form3 = QtWidgets.QWidget()
+            self.ui_optimize = Optimize()
+            self.ui_optimize.setupUi(self.Form3)
+            self.Form3.show()
             
 class FixedColumn(Ui_Form):
     def __init__(self, max_slider, columns):
@@ -1718,6 +1732,7 @@ class FixedColumn(Ui_Form):
         self.lineEdit_cutoff.setGeometry(QtCore.QRect(270, 160, 41, 21))
         self.lineEdit_cutoff.setObjectName("lineEdit_cutoff")
         self.lineEdit_cutoff.setText("10")
+        self.lineEdit_cutoff.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.scrollArea_Sheets_cutoff = QtWidgets.QScrollArea(Form2)
         self.scrollArea_Sheets_cutoff.setGeometry(QtCore.QRect(20, 10, 291, 121))
         self.scrollArea_Sheets_cutoff.setWidgetResizable(True)
@@ -1750,6 +1765,29 @@ class FixedColumn(Ui_Form):
         
     def scroll_cutoff(self):
         self.lineEdit_cutoff.setText(str(self.horizontalSlider_cutoff.value()))
+        
+class Optimize(Ui_Form):
+    def __init__(self):
+        super().__init__()
+    def setupUi(self, Form3):
+        Form3.setObjectName("Form3")
+        Form3.resize(132, 56)
+        self.label_optimize = QtWidgets.QLabel(Form3)
+        self.label_optimize.setGeometry(QtCore.QRect(10, 10, 111, 16))
+        self.label_optimize.setObjectName("label_optimize")
+        self.lineEdit_optimize = QtWidgets.QLineEdit(Form3)
+        self.lineEdit_optimize.setGeometry(QtCore.QRect(10, 30, 111, 21))
+        self.lineEdit_optimize.setObjectName("lineEdit_optimize")
+        self.lineEdit_optimize.setText("250")
+        self.lineEdit_optimize.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+
+        self.retranslateUi(Form3)
+        QtCore.QMetaObject.connectSlotsByName(Form3)
+
+    def retranslateUi(self, Form):
+        _translate = QtCore.QCoreApplication.translate
+        Form.setWindowTitle(_translate("Form", "Optimize"))
+        self.label_optimize.setText(_translate("Form", "Number of cycles"))
 
 
 if __name__ == "__main__":
