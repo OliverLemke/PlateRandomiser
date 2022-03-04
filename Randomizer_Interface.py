@@ -91,33 +91,34 @@ def set_seed(seed=-1):
     return
 
 # Read data: add tsv, csv and xlsx
-def get_data_dicts(data, ref_columns, imp_columns):
-    """
-    Generates Fingerprint dictionary
-
-    Parameters
-    ----------
-    data : pandas.DataFrame
-        Input data.
-    ref_columns : list of str
-        Identifier columns for the sample.
-    imp_columns : list of str
-        Features used for Fingerprint determination.
-
-    Returns
-    -------
-    data_dict : dict
-        Dictionary containing the data with ref_columns[0] as key.
-    Fingerprints : array
-        Fingerprints for all samples (row-wise).
-
-    """
-    data_dict = {}
-    Fingerprints = []
-    for index,row in data.iterrows():
-        data_dict.update({row[ref_columns[0]]:row})
-        Fingerprints.append(row[imp_columns])
-    return data_dict, Fingerprints
+#def get_data_dicts(data, ref_columns, imp_columns):
+#    """
+#    Generates Fingerprint dictionary
+#
+#    Parameters
+#    ----------
+#    data : pandas.DataFrame
+#        Input data.
+#    ref_columns : list of str
+#        Identifier columns for the sample.
+#    imp_columns : list of str
+#        Features used for Fingerprint determination.
+#
+#    Returns
+#    -------
+#    data_dict : dict
+#        Dictionary containing the data with ref_columns[0] as key.
+#    Fingerprints : array
+#        Fingerprints for all samples (row-wise).
+#
+#    """
+#    data_dict = {}
+#    Fingerprints = []
+#    for index,row in data.iterrows():
+#        data_dict.update({row[ref_columns[0]]:row})
+#        Fingerprints.append(row[imp_columns])
+#    data_dict = {key: value for key, value in data_dict.items() if pd.notna(key)}
+#    return data_dict, Fingerprints
 
 def get_fixed_stats(data, ref_column, label_column, cut):
     """
@@ -191,6 +192,7 @@ def get_data_dict(data, ref_columns, imp_columns):
     for index,row in data.iterrows():
         data_dict.update({row[ref_columns[0]]:row})
         Fingerprints.append(row[imp_columns])
+    data_dict = {key: value for key, value in data_dict.items() if pd.notna(key)}
     return data_dict, Fingerprints
 
 # Get Fingerprint
