@@ -1366,6 +1366,7 @@ class Ui_Form(QtWidgets.QWidget):
         self.comboBox_Output_Selection.currentIndexChanged.connect(self.show_output)
         self.checkbox_fix_column.stateChanged.connect(self.state_changed_group)
         self.checkbox_optimize.stateChanged.connect(self.state_changed_optimize)
+        self.checkbox_exclude.stateChanged.connect(self.state_changed_exclude)
         
         sys.stdout = Stream(newText=self.onUpdateText)
         sys.stderr = Stream(newText=self.onUpdateText)
@@ -1790,6 +1791,13 @@ class Ui_Form(QtWidgets.QWidget):
             self.ui_optimize.setupUi(self.Form3)
             self.Form3.show()
             
+    def state_changed_exclude(self):
+        if self.checkbox_exclude.isChecked():
+            self.Form4 = QtWidgets.QWidget()
+            self.ui_exclude = Exclude(self.comboBox_Layout.currentText())
+            self.ui_exclude.setupUi(self.Form4)
+            self.Form4.show()
+            
 class FixedColumn(Ui_Form):
     def __init__(self, max_slider, columns):
         super().__init__()
@@ -1864,7 +1872,69 @@ class Optimize(Ui_Form):
         _translate = QtCore.QCoreApplication.translate
         Form.setWindowTitle(_translate("Form", "Optimize"))
         self.label_optimize.setText(_translate("Form", "Number of cycles"))
+        
+class Exclude(Ui_Form):
+    def __init__(self, Plate_layout):
+        super().__init__()
+        self.Plate_layout = Plate_layout
+        if self.Plate_layout in ["96","60","88-","-88","-80-"]:
+            self.num_columns = 12
+            self.num_rows = 8
+        elif self.Plate_layout == "384":
+            self.num_columns = 24
+            self.num_rows = 16
+    def setupUi(self, Form4):
+        Form4.setObjectName("Form4")
+        Form4.resize(212, 300)
+        self.label = QtWidgets.QLabel(Form4)
+        self.label.setGeometry(QtCore.QRect(10, 10, 60, 16))
+        self.label.setObjectName("label")
+        self.lineEdit = QtWidgets.QLineEdit(Form4)
+        self.lineEdit.setGeometry(QtCore.QRect(10, 30, 191, 21))
+        self.lineEdit.setObjectName("lineEdit")
+        self.scrollArea_positions = QtWidgets.QScrollArea(Form4)
+        self.scrollArea_positions.setGeometry(QtCore.QRect(10, 60, 191, 231))
+        self.scrollArea_positions.setWidgetResizable(True)
+        self.scrollArea_positions.setObjectName("scrollArea_positions")
+        self.scrollAreaWidgetContents_positions = QtWidgets.QWidget()
+        self.scrollAreaWidgetContents_positions.setGeometry(QtCore.QRect(0, 0, 189, 229))
+        self.scrollAreaWidgetContents_positions.setObjectName("scrollAreaWidgetContents")
+        self.scrollArea_positions.setWidget(self.scrollAreaWidgetContents_positions)
 
+        ##### To be added (get_wells)
+        self.get_wells()
+        self.vbox_positions = QtWidgets.QVBoxLayout(self)
+        self.buttongroup_positions = QtWidgets.QButtonGroup(self, exclusive=False)
+        for i in list(self.wells):
+            self.buttonz = QtWidgets.QCheckBox(str(i),self)
+            self.vbox_positions.addWidget(self.buttonz)
+            self.buttongroup_positions.addButton(self.buttonz)
+        self.scrollAreaWidgetContents_positions.setLayout(self.vbox_positions)
+        #####
+
+        self.retranslateUi(Form4)
+        QtCore.QMetaObject.connectSlotsByName(Form4)
+
+    def retranslateUi(self, Form4):
+        _translate = QtCore.QCoreApplication.translate
+        Form4.setWindowTitle(_translate("Form4", "Exclude"))
+        self.label.setText(_translate("Form4", "Name"))
+        
+    def get_wells(self):
+        dict_num2alph, dict_alph2num = get_Dictionaries()
+        full_set = [dict_num2alph[row]+"{:02d}".format(column) for row in range(self.num_rows) for column in range(1,self.num_columns+1)]
+        if self.Plate_layout == "96":
+            self.wells = [position for position in full_set]
+        elif self.Plate_layout == "60":
+            self.wells = [position for position in full_set if (position[0] not in ["A","H"]) and position[1:] not in ["01","12"]]
+        elif self.Plate_layout == "-88":
+            self.wells = [position for position in full_set if (position[1:] not in ["01"])]
+        elif self.Plate_layout == "88-":
+            self.wells = [position for position in full_set if (position[1:] not in ["12"])]
+        elif self.Plate_layout == "-80-":
+            self.wells = [position for position in full_set if (position[1:] not in ["01","12"])]
+        elif self.Plate_layout == "384":
+            self.wells = [position for position in full_set]
 
 if __name__ == "__main__":
     import sys
