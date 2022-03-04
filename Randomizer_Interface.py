@@ -28,7 +28,7 @@ def get_Plate_layout(Plate_layout, num_Blanks, num_References=None, num_Ref_1=No
 
     Parameters
     ----------
-    Plate_layout : {"96","384"}
+    Plate_layout : {"96","60","88-","-88","-80-","384"}
         Number of wells per plate.
     num_Blanks : int
         Number of Blanks to be included per plate.
@@ -54,9 +54,18 @@ def get_Plate_layout(Plate_layout, num_Blanks, num_References=None, num_Ref_1=No
     if not num_References:
         num_References = num_Ref_1 + num_Ref_2
     
-    if Plate_layout in ["96","384"]:
+    if Plate_layout in ["96","60","88-","-88","-80-","384"]:
         if Plate_layout == "96":
             num_columns = 12
+            num_rows = 8
+        elif Plate_layout == "60":
+            num_columns = 10
+            num_rows = 6
+        elif (Plate_layout == "88-") or (Plate_layout == "-88"):
+            num_columns = 11
+            num_rows = 8
+        elif Plate_layout == "-80-":
+            num_columns = 10
             num_rows = 8
         elif Plate_layout == "384":
             num_columns = 24
@@ -312,12 +321,14 @@ def distribute_Samples(Fingerprints_list, data_dict, num_Sample_per_plate, num_p
     return Plates_overlap
 
 # Distribute References across the plates
-def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Reference_2, num_wells, num_Blanks, num_Ref_1=6, num_Ref_2=6, percentage_Ref_1=None, dict_fix_to_label=None, optimize=False, num_cycles=1):
+def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Reference_1, Reference_2, num_wells, num_Blanks, num_Ref_1=6, num_Ref_2=6, percentage_Ref_1=None, dict_fix_to_label=None, optimize=False, num_cycles=1, num_columns=12):
     """
     Add references and blanks to the plate
 
     Parameters
     ----------
+    Plate_layout : {"96","60","88-","-88","-80-","384"}
+        Number of wells per plate.
     Plates_overlap : list of arrays
         Samples distributed num_plates over plates.
     Fingerprints_list : list of str
@@ -340,12 +351,21 @@ def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Refere
         Performance of optimization. The default is False.
     num_cycles: int, optional
         Number of optimization cycles to be performed. The deafult is 1.
+    num_columns: int, optional
+        Number of columns to be filled. Only needed for optimization. The default is 12.
 
     Returns
     -------
     Plates_final : list of arrays
         Samples, References and Blanks distributed over num_plates plates.
     """
+
+    if Plate_layout == "60":
+        num_wells -= 36
+    elif Plate_layout in ["-88","88-"]:
+        num_wells -= 8
+    if Plate_layout == "-80-":
+        num_wells -= 16
 
     Plates_final = []
     for ind,plate in enumerate(Plates_overlap):
@@ -367,30 +387,64 @@ def distribute_References(Plates_overlap, Fingerprints_list, Reference_1, Refere
         plate = np.concatenate((plate,Ref_1,Ref_2,Blanks))
         if optimize:
             score = len(plate)**2
-            for i in range(num_cycles):
-                plate = shuffle(plate)
+            for j in range(num_cycles):
+                plate_opt = list(shuffle(plate))
+                if Plate_layout == "60":
+                    for i in range(0,72,12):
+                        plate_opt.insert(i,"Empty")
+                        plate_opt.insert(i+11,"Empty")
+                    plate_opt[0:0] = ["Empty"]*12
+                    plate_opt.extend(["Empty"]*12)
+                elif Plate_layout == "-88":
+                    for i in range(0,96,12):
+                        plate_opt.insert(i,"Empty")
+                elif Plate_layout == "88-":
+                    for i in range(0,96,12):
+                        plate_opt.insert(i+11,"Empty")
+                if Plate_layout == "-80-":
+                    for i in range(0,96,12):
+                        plate_opt.insert(i,"Empty")
+                        plate_opt.insert(i+11,"Empty")
+                plate_opt = np.asarray(plate_opt)
                 ###### add fixed
-                score_eval = evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2)
+                score_eval = evaluate_plate_layout(plate_opt, Fingerprints_list, Reference_1, Reference_2, num_columns)
                 if dict_fix_to_label:
-                    score_label = evaluate_plate_layout_fixed(plate,dict_fix_to_label)
+                    score_label = evaluate_plate_layout_fixed(plate_opt,dict_fix_to_label, num_columns)
                     score_eval = (score_eval+score_label)/2
                 if score_eval <= score:
                     score = score_eval
-                    print(i)
+                    print(j)
                     print(score)
-                    plate_final = plate
+                    plate_final = plate_opt
         else:
-            plate_final = shuffle(plate)
+            plate = list(shuffle(plate))
+            if Plate_layout == "60":
+                for i in range(0,72,12):
+                    plate.insert(i,"Empty")
+                    plate.insert(i+11,"Empty")
+                plate[0:0] = ["Empty"]*12
+                plate.extend(["Empty"]*12)
+            elif Plate_layout == "-88":
+                for i in range(0,96,12):
+                    plate.insert(i,"Empty")
+            elif Plate_layout == "88-":
+                for i in range(0,96,12):
+                    plate.insert(i+11,"Empty")
+            if Plate_layout == "-80-":
+                for i in range(0,96,12):
+                    plate.insert(i,"Empty")
+                    plate.insert(i+11,"Empty")
             ###### add fixed
+            plate_final = np.asarray(plate)
         Plates_final.append(plate_final)
     return Plates_final
 
-def evaluate_plate_layout_fixed(plate, dict_fix_to_label):
+def evaluate_plate_layout_fixed(plate, dict_fix_to_label, num_columns):
     score = 0
-    if len(plate)==96:
-        num_columns = 12
-    elif len(plate)==384:
-        num_columns = 24
+    #if len(plate)==96:
+    #    num_columns = 12
+    #elif len(plate)==384:
+    #    num_columns = 24
     for key in dict_fix_to_label:
         coord = np.asarray([[int(ind/num_columns),np.mod(ind,num_columns)] for ind,item in enumerate(plate) if item.astype("U25") in dict_fix_to_label[key].astype("U25")])
         try:
@@ -403,12 +457,12 @@ def get_Fingerprints_list_full_fixed(Fingerprints_list, dict_fix_to_label):
     Fingerprints_list_full = [np.asarray([el for key in item for el in dict_fix_to_label[key]]) for item in Fingerprints_list]
     return Fingerprints_list_full
 
-def evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2):
+def evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2, num_columns):
     score = 0
-    if len(plate)==96:
-        num_columns = 12
-    elif len(plate)==384:
-        num_columns = 24
+    #if len(plate)==96:
+    #    num_columns = 12
+    #elif len(plate)==384:
+    #    num_columns = 24
     for el in Fingerprints_list:
         coord = np.asarray([[int(ind/num_columns),np.mod(ind,num_columns)] for ind,item in enumerate(plate) if item.astype("U25") in el.astype("U25")])
         try:
@@ -458,6 +512,7 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
     c_Ref_1 = 1
     c_Ref_2 = 1
     c_Blank = 1
+    c_Empty = 1
     
     if out_file[-4:]==".csv":
         sep=","
@@ -494,7 +549,7 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                 file.write("%s" %dict_alph[np.floor(index2/num_columns)])
                 file.write(sep)
                 file.write(str(np.mod(index2,num_columns)+1)+sep)
-                if (el != Reference_1) & (el != Reference_2) & (el != "Blank"):
+                if (el != Reference_1) & (el != Reference_2) & (el != "Blank") & (el != "Empty"):
                     try:
                         check = data_dict[el]
                     except:
@@ -506,6 +561,8 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                     file.write(Reference_2+"_{:03}".format(c_Ref_2))
                 elif el == "Blank":
                     file.write("Blank_"+"{:03}".format(c_Blank))
+                elif el == "Empty":
+                    file.write("Empty_"+"{:03}".format(c_Empty))
                 else:
                     file.write(str(el))
                 file.write(sep)
@@ -540,6 +597,16 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                         file.write("Blank")
                         file.write(sep)
                     c_Blank+=1
+                elif el == "Empty":
+                    for i in range(len(ref_columns)):
+                        file.write("Empty_"+"{:03}".format(c_Empty)+sep)
+                    for i in range(len(imp_columns)):
+                        file.write("Empty")
+                        file.write(sep)
+                    if label_column:
+                        file.write("Empty")
+                        file.write(sep)
+                    c_Empty+=1
                 else:
                     for ref_column in ref_columns:
                         file.write("%s" %data_dict[el][ref_column])
@@ -555,14 +622,14 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                 else:
                     for ind,column in enumerate(remaining_columns):
                         if ind != len(remaining_columns)-1:
-                            if (el != Reference_1) & (el != Reference_2) & (el != "Blank"):
+                            if (el != Reference_1) & (el != Reference_2) & (el != "Blank") & (el != "Empty"):
                                 file.write("%s" %data_dict[el][column])
                                 file.write(sep)
                             else:
                                 file.write("NA")
                                 file.write(sep)
                         else:
-                            if (el != Reference_1) & (el != Reference_2) & (el != "Blank"):
+                            if (el != Reference_1) & (el != Reference_2) & (el != "Blank") & (el != "Empty"):
                                 file.write("%s\n" %data_dict[el][column])
                             else:
                                 file.write("NA\n")
@@ -1120,7 +1187,7 @@ class Ui_Form(QtWidgets.QWidget):
         self.gridlayout.addWidget(self.label_Layout, 0, 0, 1, 1)
         self.comboBox_Layout = QtWidgets.QComboBox(self.gridLayoutWidget)
         self.comboBox_Layout.setObjectName("comboBox_Layout")
-        self.comboBox_Layout.addItems(["96","384"])
+        self.comboBox_Layout.addItems(["96","60","88-","-88","-80-","384"])
         self.gridlayout.addWidget(self.comboBox_Layout, 0, 1, 1, 1)
         self.label_Blanks = QtWidgets.QLabel(self.gridLayoutWidget)
         self.label_Blanks.setObjectName("label_Blanks")
@@ -1342,7 +1409,7 @@ class Ui_Form(QtWidgets.QWidget):
 
     def get_Input(self):
         self.Plate_layout = str(self.comboBox_Layout.currentText())
-        if self.Plate_layout == "96":
+        if self.Plate_layout in ["96","60","88-","-88","-80-"]:
             self.num_columns = 12
             self.num_rows = 8
         elif self.Plate_layout == "384":
@@ -1375,6 +1442,13 @@ class Ui_Form(QtWidgets.QWidget):
             print("Minimal Number of References: {0}".format(self.num_References))
             print("Percentage of Reference 1: {0}".format(self.percentage_Ref_1))
             self.num_wells_to_fill = self.num_wells - self.num_Blanks - self.num_References
+            
+        if self.Plate_layout == "60":
+            self.num_wells_to_fill -= 36
+        elif self.Plate_layout in ["-88","88-"]:
+            self.num_wells_to_fill -= 8
+        elif self.Plate_layout == "-80-":
+            self.num_wells_to_fill -= 16
             
     
     def open_file(self):
@@ -1516,10 +1590,10 @@ class Ui_Form(QtWidgets.QWidget):
                 self.raiseError("Input selection or Fingerprint generation failed.")
             if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
                 self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_Ref_1+self.num_Ref_2, self.num_Blanks) 
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize, num_cycles=self.num_cycles)
+                self.Plates_final = distribute_References(self.Plate_layout, self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize, num_cycles=self.num_cycles, num_columns=self.num_columns)
             else:
                 self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_References, self.num_Blanks)             
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize, num_cycles=self.num_cycles)
+                self.Plates_final = distribute_References(self.Plate_layout, self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize, num_cycles=self.num_cycles, num_columns=self.num_columns)
             self.data_dict_fixed = get_data_dict_fixed(self.data, self.ref_columns)
             print("--------------------")
             print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
@@ -1547,9 +1621,9 @@ class Ui_Form(QtWidgets.QWidget):
                 self.raiseError("Input selection or Fingerprint generation failed.")
             self.Plates_overlap = distribute_Samples(self.Fingerprints_list, self.data_dict, self.num_Sample_per_plate, self.num_plates)
             if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, optimize=self.optimize, num_cycles=self.num_cycles)
+                self.Plates_final = distribute_References(self.Plate_layout, self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, optimize=self.optimize, num_cycles=self.num_cycles, num_columns=self.num_columns)
             else:
-                self.Plates_final = distribute_References(self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, optimize=self.optimize, num_cycles=self.num_cycles)
+                self.Plates_final = distribute_References(self.Plate_layout, self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, optimize=self.optimize, num_cycles=self.num_cycles, num_columns=self.num_columns)
             print("--------------------")
             print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
             generate_Output(self.data_dict, self.Plates_final, self.ref_columns, self.imp_columns, self.num_columns, self.output_columns, self.Reference_1, self.Reference_2, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())) 
