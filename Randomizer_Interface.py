@@ -14,9 +14,7 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 import os
 from sklearn.metrics.pairwise import manhattan_distances
-
-### To Do
-# Add forbidden/fixed wells
+import re
 
 # Name
 # Icon
@@ -1795,7 +1793,7 @@ class Ui_Form(QtWidgets.QWidget):
 class FixedColumn(Ui_Form):
     def __init__(self, max_slider, columns):
         super().__init__()
-        self.max_slider = int(max_slider)
+        self.max_slider = int(re.findall("[0-9]+",max_slider)[0])
         self.columns = columns
     def setupUi(self, Form2):
         Form2.setObjectName("Form2")
