@@ -90,36 +90,6 @@ def set_seed(seed=-1):
     np.random.seed(seed)
     return
 
-# Read data: add tsv, csv and xlsx
-#def get_data_dicts(data, ref_columns, imp_columns):
-#    """
-#    Generates Fingerprint dictionary
-#
-#    Parameters
-#    ----------
-#    data : pandas.DataFrame
-#        Input data.
-#    ref_columns : list of str
-#        Identifier columns for the sample.
-#    imp_columns : list of str
-#        Features used for Fingerprint determination.
-#
-#    Returns
-#    -------
-#    data_dict : dict
-#        Dictionary containing the data with ref_columns[0] as key.
-#    Fingerprints : array
-#        Fingerprints for all samples (row-wise).
-#
-#    """
-#    data_dict = {}
-#    Fingerprints = []
-#    for index,row in data.iterrows():
-#        data_dict.update({row[ref_columns[0]]:row})
-#        Fingerprints.append(row[imp_columns])
-#    data_dict = {key: value for key, value in data_dict.items() if pd.notna(key)}
-#    return data_dict, Fingerprints
-
 def get_fixed_stats(data, ref_column, label_column, cut):
     """
     Get Dictionaries for relationships
@@ -147,19 +117,15 @@ def get_fixed_stats(data, ref_column, label_column, cut):
         Samples to be pre-distributed.
     """
     
-    # B = dict_fix_to_label
     dict_fix_to_label = {}
     for ID in data[label_column].values:
         dict_fix_to_label.update({ID:data[data[label_column]==ID][ref_column].values})
-    # C = dict_label_to_fix
     dict_label_to_fix = {}
     for ID in data[label_column].values:
         for item in data[data[label_column]==ID][ref_column].values:
             dict_label_to_fix.update({item:ID})
       
-    # A = dict_fix_to_fingerprint
     dict_fix_to_fingerprint = {}
-    # D = labels_cut
     labels_cut = []
     
     for key in np.unique(data[label_column].values):
@@ -323,9 +289,9 @@ def distribute_Samples(Fingerprints_list, data_dict, num_Sample_per_plate, num_p
     return Plates_overlap
 
 # Distribute References across the plates
-def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Reference_1, Reference_2, num_wells, num_Blanks, num_Ref_1=6, num_Ref_2=6, percentage_Ref_1=None, dict_fix_to_label=None, optimize=False, num_cycles=1, num_columns=12):
+def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Reference_1, Reference_2, num_wells, num_Blanks, num_Ref_1=6, num_Ref_2=6, percentage_Ref_1=None, dict_fix_to_label=None, optimize=False, num_cycles=1, num_columns=12, excluded=None, excluded_name="", num_excluded_wells=0):
     """
-    Add references and blanks to the plate
+    Add references and blanks to the plate and implements layout optimization.
 
     Parameters
     ----------
@@ -349,12 +315,18 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
         Number of Reference 2 (needed if num_References is not defined). The default is 6.
     percentage_Ref_1 : float, optional
         Percentage of Reference 1 (needed if num_Ref_1 and num_Ref_2 are not defined). The default is None.
-    optimize: bool, optional
+    optimize : bool, optional
         Performance of optimization. The default is False.
-    num_cycles: int, optional
+    num_cycles : int, optional
         Number of optimization cycles to be performed. The deafult is 1.
-    num_columns: int, optional
+    num_columns : int, optional
         Number of columns to be filled. Only needed for optimization. The default is 12.
+    excluded : list of int, optional
+        Indices to be excluded. The default is None.
+    excluded_name : str, optional
+        Name of the excluded wells. The default is "".
+    num_excluded_wells : int, optional
+        Number of excluded wells. The default is 0.
 
     Returns
     -------
@@ -372,7 +344,7 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
     Plates_final = []
     for ind,plate in enumerate(Plates_overlap):
         if percentage_Ref_1:
-            num_Ref = int(num_wells-len(plate)-num_Blanks)
+            num_Ref = int(num_wells-len(plate)-num_Blanks-num_excluded_wells)
             num_Ref_1 = int(np.floor(percentage_Ref_1 * num_Ref))
             num_Ref_2 = int(np.floor((1-percentage_Ref_1) * num_Ref))
             if num_Ref_1+num_Ref_2 != num_Ref:
@@ -381,16 +353,22 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
                     num_Ref_1+=1
                 else:
                     num_Ref_2+=1
+            num_Blanks_f = int(num_Blanks)
         else:
-            num_Blanks += int(num_wells-len(plate)-num_Blanks-num_Ref_1-num_Ref_2)
+            num_Blanks_f = int(num_wells-len(plate)-num_Ref_1-num_Ref_2-num_excluded_wells)
         Ref_1 = np.asarray([Reference_1]*num_Ref_1)
         Ref_2 = np.asarray([Reference_2]*num_Ref_2)
-        Blanks = np.asarray(["Blank"]*num_Blanks) 
+        Blanks = np.asarray(["Blank"]*num_Blanks_f) 
         plate = np.concatenate((plate,Ref_1,Ref_2,Blanks))
         if optimize:
             score = len(plate)**2
             for j in range(num_cycles):
                 plate_opt = list(shuffle(plate))
+                
+                if excluded:
+                    for well_index in excluded:
+                        plate_opt.insert(well_index, excluded_name)
+                
                 if Plate_layout == "60":
                     for i in range(0,72,12):
                         plate_opt.insert(i,"Empty")
@@ -408,7 +386,6 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
                         plate_opt.insert(i,"Empty")
                         plate_opt.insert(i+11,"Empty")
                 plate_opt = np.asarray(plate_opt)
-                ###### add fixed
                 score_eval = evaluate_plate_layout(plate_opt, Fingerprints_list, Reference_1, Reference_2, num_columns)
                 if dict_fix_to_label:
                     score_label = evaluate_plate_layout_fixed(plate_opt,dict_fix_to_label, num_columns)
@@ -420,6 +397,11 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
                     plate_final = plate_opt
         else:
             plate = list(shuffle(plate))
+            
+            if excluded:
+                for well_index in excluded:
+                    plate.insert(well_index, excluded_name)
+            
             if Plate_layout == "60":
                 for i in range(0,72,12):
                     plate.insert(i,"Empty")
@@ -436,17 +418,12 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
                 for i in range(0,96,12):
                     plate.insert(i,"Empty")
                     plate.insert(i+11,"Empty")
-            ###### add fixed
             plate_final = np.asarray(plate)
         Plates_final.append(plate_final)
     return Plates_final
 
 def evaluate_plate_layout_fixed(plate, dict_fix_to_label, num_columns):
     score = 0
-    #if len(plate)==96:
-    #    num_columns = 12
-    #elif len(plate)==384:
-    #    num_columns = 24
     for key in dict_fix_to_label:
         coord = np.asarray([[int(ind/num_columns),np.mod(ind,num_columns)] for ind,item in enumerate(plate) if item.astype("U25") in dict_fix_to_label[key].astype("U25")])
         try:
@@ -461,10 +438,6 @@ def get_Fingerprints_list_full_fixed(Fingerprints_list, dict_fix_to_label):
 
 def evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2, num_columns):
     score = 0
-    #if len(plate)==96:
-    #    num_columns = 12
-    #elif len(plate)==384:
-    #    num_columns = 24
     for el in Fingerprints_list:
         coord = np.asarray([[int(ind/num_columns),np.mod(ind,num_columns)] for ind,item in enumerate(plate) if item.astype("U25") in el.astype("U25")])
         try:
@@ -482,10 +455,9 @@ def evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2, nu
     except:
         pass
     return score
-    ##### negative exp ### exp(-D)
 
 # Wirte Output-file
-def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_columns, remaining_columns, Reference_1, Reference_2, out_file="Out.txt", label_column = None):
+def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_columns, remaining_columns, Reference_1, Reference_2, out_file="Out.txt", label_column = None, excluded_name = ""):
     """
     Write Output file (tab-separated)
 
@@ -507,6 +479,8 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
         Name of the output file. The default is "Out.txt".
     label_column : list of str, optional
         List containing the column used for force samples onto one plate. The default is None.
+    excluded_name : str, optional
+        Name of the excluded wells. The default is "".
     """
 
     dict_alph, dict_num = get_Dictionaries()
@@ -515,6 +489,7 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
     c_Ref_2 = 1
     c_Blank = 1
     c_Empty = 1
+    c_excluded = 1
     
     if out_file[-4:]==".csv":
         sep=","
@@ -551,7 +526,7 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                 file.write("%s" %dict_alph[np.floor(index2/num_columns)])
                 file.write(sep)
                 file.write(str(np.mod(index2,num_columns)+1)+sep)
-                if (el != Reference_1) & (el != Reference_2) & (el != "Blank") & (el != "Empty"):
+                if (el != Reference_1) & (el != Reference_2) & (el != "Blank") & (el != "Empty") & (el != excluded_name):
                     try:
                         check = data_dict[el]
                     except:
@@ -609,6 +584,16 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                         file.write("Empty")
                         file.write(sep)
                     c_Empty+=1
+                elif el == excluded_name:
+                    for i in range(len(ref_columns)):
+                        file.write(excluded_name+"_"+"{:03}".format(c_excluded)+sep)
+                    for i in range(len(imp_columns)):
+                        file.write(excluded_name)
+                        file.write(sep)
+                    if label_column:
+                        file.write(excluded_name)
+                        file.write(sep)
+                    c_excluded+=1
                 else:
                     for ref_column in ref_columns:
                         file.write("%s" %data_dict[el][ref_column])
@@ -624,14 +609,14 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                 else:
                     for ind,column in enumerate(remaining_columns):
                         if ind != len(remaining_columns)-1:
-                            if (el != Reference_1) & (el != Reference_2) & (el != "Blank") & (el != "Empty"):
+                            if (el != Reference_1) & (el != Reference_2) & (el != "Blank") & (el != "Empty") & (el != excluded_name):
                                 file.write("%s" %data_dict[el][column])
                                 file.write(sep)
                             else:
                                 file.write("NA")
                                 file.write(sep)
                         else:
-                            if (el != Reference_1) & (el != Reference_2) & (el != "Blank") & (el != "Empty"):
+                            if (el != Reference_1) & (el != Reference_2) & (el != "Blank") & (el != "Empty") & (el != excluded_name):
                                 file.write("%s\n" %data_dict[el][column])
                             else:
                                 file.write("NA\n")
@@ -961,7 +946,7 @@ def get_num_Fingerprint(Fingerprints_list, num_wells_to_fill, dict_fix_to_finger
     return num_Fingerprint, num_plates
 
 # Distribute samples with forcing samples onto the same plate
-def distribute_samples_fixed(Fingerprints_list, data_dict, num_plates, dict_fix_to_label, labels_cut, num_wells, num_References, num_Blanks):
+def distribute_samples_fixed(Fingerprints_list, data_dict, num_plates, dict_fix_to_label, labels_cut, num_wells_to_fill, num_References, num_Blanks):
     """
     Distribute samples forcing samples of same identifier onto the same plate.
 
@@ -977,8 +962,8 @@ def distribute_samples_fixed(Fingerprints_list, data_dict, num_plates, dict_fix_
         Dictionary for fixed references to label.
     labels_cut : list of str
         Samples to be pre-distributed.
-    num_wells : int
-        Number of wells per plate.
+    num_wells_to_fill : int
+        Number of wells to fill per plate.
     num_References : int
         Number of References.
     num_Blanks : int
@@ -1018,13 +1003,13 @@ def distribute_samples_fixed(Fingerprints_list, data_dict, num_plates, dict_fix_
         Overlap = shuffle(Overlap)
         Plates_step = [[el for item in plate for el in dict_fix_to_label[item]] for plate in Plates]
         
-        if all(np.asarray([len(plate) for plate in Plates_step]) <= num_wells-num_References-num_Blanks):
+        if all(np.asarray([len(plate) for plate in Plates_step]) <= num_wells_to_fill):
             c=0
             b=0
             while c<len(Overlap):
                 Plates_step = [[el for item in plate for el in dict_fix_to_label[item]] for plate in Plates]
                 for ind,plate in enumerate(Plates):
-                    if len(Plates_step[ind]) + len(dict_fix_to_label[Overlap[c]]) <= num_wells-num_Blanks-num_References:
+                    if len(Plates_step[ind]) + len(dict_fix_to_label[Overlap[c]]) <= num_wells_to_fill:
                         Plates[ind]=(np.concatenate((plate,[Overlap[c]])))
                         c+=1
                     b+=1
@@ -1040,7 +1025,7 @@ def distribute_samples_fixed(Fingerprints_list, data_dict, num_plates, dict_fix_
         else: 
             Plates_full = [np.zeros(100)]
         
-        if any(np.asarray([len(plate) for plate in Plates_full]) > num_wells-num_References-num_Blanks):
+        if any(np.asarray([len(plate) for plate in Plates_full]) > num_wells_to_fill):
             #print(np.asarray([len(plate) for plate in Plates_full]))
             print("try again")
         else:
@@ -1165,7 +1150,6 @@ class Ui_Form(QtWidgets.QWidget):
         self.scrollAreaWidgetContents_Fingerprint_Preview.setGeometry(QtCore.QRect(0, 0, 279, 299))
         self.scrollAreaWidgetContents_Fingerprint_Preview.setObjectName("scrollAreaWidgetContents_Fingerprint_Preview")
         self.plainTextEdit_Fingerprints_Preview = QtWidgets.QPlainTextEdit(self.scrollAreaWidgetContents_Fingerprint_Preview)
-        #self.plainTextEdit_Fingerprints_Preview.setEnabled(True)
         self.plainTextEdit_Fingerprints_Preview.setGeometry(QtCore.QRect(0, 0, 281, 301))
         self.plainTextEdit_Fingerprints_Preview.setReadOnly(True)
         self.plainTextEdit_Fingerprints_Preview.setPlainText("")
@@ -1275,12 +1259,6 @@ class Ui_Form(QtWidgets.QWidget):
         self.horizontalLayout_Seed = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget_Seed)
         self.horizontalLayout_Seed.setContentsMargins(10, 0, 10, 0)
         self.horizontalLayout_Seed.setObjectName("horizontalLayout_Seed")
-        #self.horizontalSlider_Seed = QtWidgets.QSlider(self.horizontalLayoutWidget_Seed)
-        #self.horizontalSlider_Seed.setMaximum(99999)
-        #self.horizontalSlider_Seed.setSliderPosition(42)
-        #self.horizontalSlider_Seed.setOrientation(QtCore.Qt.Horizontal)
-        #self.horizontalSlider_Seed.setObjectName("horizontalSlider_Seed")
-        #self.horizontalLayout_Seed.addWidget(self.horizontalSlider_Seed)
         self.lineEdit_Seed = QtWidgets.QLineEdit(self.horizontalLayoutWidget_Seed)
         self.lineEdit_Seed.setObjectName("lineEdit_Seed")
         self.lineEdit_Seed.setText("42")
@@ -1360,7 +1338,6 @@ class Ui_Form(QtWidgets.QWidget):
         self.pushButton_Input.clicked.connect(self.open_file)
         self.pushButton_Recompute.clicked.connect(self.load_sheets)
         self.pushButton_Fingerprints_Preview.clicked.connect(self.get_preview)
-        #self.horizontalSlider_Seed.valueChanged.connect(self.scroll_seed)
         self.pushButton_Run.clicked.connect(self.run_script)
         self.pushButton_Output.clicked.connect(self.set_output_path)
         self.comboBox_Output_Selection.currentIndexChanged.connect(self.show_output)
@@ -1436,7 +1413,7 @@ class Ui_Form(QtWidgets.QWidget):
         if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
             self.num_Ref_1 = int(self.spinBox_num_Ref1.value())
             self.num_Ref_2 = int(self.spinBox_num_Ref2.value())
-            self.num_wells_to_fill = self.num_wells - self.num_Blanks - self.num_Ref_1 - self.num_Ref_2
+            self.num_wells_to_fill = self.num_wells - self.num_Blanks - self.num_Ref_1 - self.num_Ref_2 - self.num_excluded_wells
             print("Number of Reference 1: {0}".format(self.num_Ref_1))
             print("Number of Reference 2: {0}".format(self.num_Ref_2))
         else:
@@ -1444,7 +1421,7 @@ class Ui_Form(QtWidgets.QWidget):
             self.percentage_Ref_1 = float(self.doubleSpinBox_perc_Ref1.value())
             print("Minimal Number of References: {0}".format(self.num_References))
             print("Percentage of Reference 1: {0}".format(self.percentage_Ref_1))
-            self.num_wells_to_fill = self.num_wells - self.num_Blanks - self.num_References
+            self.num_wells_to_fill = self.num_wells - self.num_Blanks - self.num_References - self.num_excluded_wells
             
         if self.Plate_layout == "60":
             self.num_wells_to_fill -= 36
@@ -1486,10 +1463,20 @@ class Ui_Form(QtWidgets.QWidget):
         for button in self.ui_fix_column.buttongroup_cutoff.buttons():
             if button.isChecked():
                 self.label_column.append(button.text())
-    
-    #def scroll_seed(self):
-    #    self.lineEdit_Seed.setText(str(self.horizontalSlider_Seed.value()))
-    
+                
+    def get_excluded_wells(self):
+        self.excluded_indices = []
+        self.excluded_wells = []
+        for ind,button in enumerate(self.ui_exclude.buttongroup_positions.buttons()):
+            if button.isChecked():
+                self.excluded_indices.append(ind)
+                self.excluded_wells.append(button.text())
+        self.num_excluded_wells = len(self.excluded_indices)
+        self.excluded_label = str(self.ui_exclude.lineEdit_positions.text())
+            
+    ##### get positions
+    ###### modify Summary
+        
     def read_Input(self):
         if self.scrollAreaWidgetContents_Sheets.layout():
             QtWidgets.QWidget().setLayout(self.scrollAreaWidgetContents_Sheets.layout()) 
@@ -1558,6 +1545,13 @@ class Ui_Form(QtWidgets.QWidget):
         self.comboBox_Output_Selection.clear()
         self.optimize = False
         self.num_cycles = 1
+        if self.checkbox_exclude.isChecked():
+            self.get_excluded_wells()
+        else:
+            self.excluded_indices = []
+            self.excluded_wells = []
+            self.num_excluded_wells = 0
+            self.excluded_label = ""
         try:
             self.get_Input()
             if self.num_wells_to_fill <= 0:
@@ -1592,15 +1586,15 @@ class Ui_Form(QtWidgets.QWidget):
                 self.groupBox_Input.setStyleSheet("QGroupBox#ColoredGroupBox { border: 1px solid red;}")
                 self.raiseError("Input selection or Fingerprint generation failed.")
             if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
-                self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_Ref_1+self.num_Ref_2, self.num_Blanks) 
-                self.Plates_final = distribute_References(self.Plate_layout, self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize, num_cycles=self.num_cycles, num_columns=self.num_columns)
+                self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells_to_fill, self.num_Ref_1+self.num_Ref_2, self.num_Blanks) 
+                self.Plates_final = distribute_References(self.Plate_layout, self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize, num_cycles=self.num_cycles, num_columns=self.num_columns, excluded=self.excluded_indices, excluded_name=self.excluded_label, num_excluded_wells=self.num_excluded_wells)
             else:
-                self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells, self.num_References, self.num_Blanks)             
-                self.Plates_final = distribute_References(self.Plate_layout, self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize, num_cycles=self.num_cycles, num_columns=self.num_columns)
+                self.Plates_overlap, self.Plates = distribute_samples_fixed(self.Fingerprints_list, self.data_dict, self.num_plates, self.dict_fix_to_label, self.labels_cut, self.num_wells_to_fill, self.num_References, self.num_Blanks)             
+                self.Plates_final = distribute_References(self.Plate_layout, self.Plates_overlap, self.Fingerprints_list_full, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, dict_fix_to_label=self.dict_fix_to_label, optimize=self.optimize, num_cycles=self.num_cycles, num_columns=self.num_columns, excluded=self.excluded_indices, excluded_name=self.excluded_label, num_excluded_wells=self.num_excluded_wells)
             self.data_dict_fixed = get_data_dict_fixed(self.data, self.ref_columns)
             print("--------------------")
             print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
-            generate_Output(self.data_dict_fixed, self.Plates_final, self.ref_columns, self.imp_columns, self.num_columns, self.output_columns, self.Reference_1, self.Reference_2, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText()), label_column=self.label_column) 
+            generate_Output(self.data_dict_fixed, self.Plates_final, self.ref_columns, self.imp_columns, self.num_columns, self.output_columns, self.Reference_1, self.Reference_2, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText()), label_column=self.label_column, excluded_name=self.excluded_label) 
             self.num_Fingerprint_per_plate = get_Statistics(self.data_dict, self.Fingerprint_IDs, self.Plates, self.imp_columns)
             print_Statistics(self.Fingerprint_IDs, self.Plates_final, self.num_Fingerprint_per_plate, self.Reference_1, self.Reference_2)
             self.data_out, self.Fingerprint_IDs_plate = read_plates(self.imp_columns, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText()))
@@ -1624,12 +1618,12 @@ class Ui_Form(QtWidgets.QWidget):
                 self.raiseError("Input selection or Fingerprint generation failed.")
             self.Plates_overlap = distribute_Samples(self.Fingerprints_list, self.data_dict, self.num_Sample_per_plate, self.num_plates)
             if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
-                self.Plates_final = distribute_References(self.Plate_layout, self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, optimize=self.optimize, num_cycles=self.num_cycles, num_columns=self.num_columns)
+                self.Plates_final = distribute_References(self.Plate_layout, self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, num_Ref_1=self.num_Ref_1, num_Ref_2=self.num_Ref_2, optimize=self.optimize, num_cycles=self.num_cycles, num_columns=self.num_columns, excluded=self.excluded_indices, excluded_name=self.excluded_label, num_excluded_wells=self.num_excluded_wells)
             else:
-                self.Plates_final = distribute_References(self.Plate_layout, self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, optimize=self.optimize, num_cycles=self.num_cycles, num_columns=self.num_columns)
+                self.Plates_final = distribute_References(self.Plate_layout, self.Plates_overlap, self.Fingerprints_list, self.Reference_1, self.Reference_2, self.num_wells, self.num_Blanks, percentage_Ref_1=self.percentage_Ref_1, optimize=self.optimize, num_cycles=self.num_cycles, num_columns=self.num_columns, excluded=self.excluded_indices, excluded_name=self.excluded_label, num_excluded_wells=self.num_excluded_wells)
             print("--------------------")
             print("Writing Output to: "+str(os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())))
-            generate_Output(self.data_dict, self.Plates_final, self.ref_columns, self.imp_columns, self.num_columns, self.output_columns, self.Reference_1, self.Reference_2, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText())) 
+            generate_Output(self.data_dict, self.Plates_final, self.ref_columns, self.imp_columns, self.num_columns, self.output_columns, self.Reference_1, self.Reference_2, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText()), excluded_name=self.excluded_label) 
             self.num_Fingerprint_per_plate = get_Statistics(self.data_dict, self.Fingerprint_IDs, self.Plates_final, self.imp_columns)
             print_Statistics(self.Fingerprint_IDs, self.Plates_final, self.num_Fingerprint_per_plate, self.Reference_1, self.Reference_2)
             self.data_out, self.Fingerprint_IDs_plate = read_plates(self.imp_columns, os.path.join(self.lineEdit_Output.text(),"Out"+self.comboBox_Output.currentText()))
@@ -1886,12 +1880,12 @@ class Exclude(Ui_Form):
     def setupUi(self, Form4):
         Form4.setObjectName("Form4")
         Form4.resize(212, 300)
-        self.label = QtWidgets.QLabel(Form4)
-        self.label.setGeometry(QtCore.QRect(10, 10, 60, 16))
-        self.label.setObjectName("label")
-        self.lineEdit = QtWidgets.QLineEdit(Form4)
-        self.lineEdit.setGeometry(QtCore.QRect(10, 30, 191, 21))
-        self.lineEdit.setObjectName("lineEdit")
+        self.label_positions = QtWidgets.QLabel(Form4)
+        self.label_positions.setGeometry(QtCore.QRect(10, 10, 60, 16))
+        self.label_positions.setObjectName("label")
+        self.lineEdit_positions = QtWidgets.QLineEdit(Form4)
+        self.lineEdit_positions.setGeometry(QtCore.QRect(10, 30, 191, 21))
+        self.lineEdit_positions.setObjectName("lineEdit")
         self.scrollArea_positions = QtWidgets.QScrollArea(Form4)
         self.scrollArea_positions.setGeometry(QtCore.QRect(10, 60, 191, 231))
         self.scrollArea_positions.setWidgetResizable(True)
@@ -1901,7 +1895,6 @@ class Exclude(Ui_Form):
         self.scrollAreaWidgetContents_positions.setObjectName("scrollAreaWidgetContents")
         self.scrollArea_positions.setWidget(self.scrollAreaWidgetContents_positions)
 
-        ##### To be added (get_wells)
         self.get_wells()
         self.vbox_positions = QtWidgets.QVBoxLayout(self)
         self.buttongroup_positions = QtWidgets.QButtonGroup(self, exclusive=False)
@@ -1910,7 +1903,6 @@ class Exclude(Ui_Form):
             self.vbox_positions.addWidget(self.buttonz)
             self.buttongroup_positions.addButton(self.buttonz)
         self.scrollAreaWidgetContents_positions.setLayout(self.vbox_positions)
-        #####
 
         self.retranslateUi(Form4)
         QtCore.QMetaObject.connectSlotsByName(Form4)
@@ -1918,7 +1910,7 @@ class Exclude(Ui_Form):
     def retranslateUi(self, Form4):
         _translate = QtCore.QCoreApplication.translate
         Form4.setWindowTitle(_translate("Form4", "Exclude"))
-        self.label.setText(_translate("Form4", "Name"))
+        self.label_positions.setText(_translate("Form4", "Name"))
         
     def get_wells(self):
         dict_num2alph, dict_alph2num = get_Dictionaries()
