@@ -88,6 +88,7 @@ def set_seed(seed=-1):
     np.random.seed(seed)
     return
 
+# Get dictionaries for grouping of samples
 def get_fixed_stats(data, ref_column, label_column, cut):
     """
     Get Dictionaries for relationships
@@ -313,6 +314,8 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
         Number of Reference 2 (needed if num_References is not defined). The default is 6.
     percentage_Ref_1 : float, optional
         Percentage of Reference 1 (needed if num_Ref_1 and num_Ref_2 are not defined). The default is None.
+    dict_fix_to_label : dict
+        Dictionary for fixed references to label. The default is None.
     optimize : bool, optional
         Performance of optimization. The default is False.
     num_cycles : int, optional
@@ -386,7 +389,7 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
                 plate_opt = np.asarray(plate_opt)
                 score_eval = evaluate_plate_layout(plate_opt, Fingerprints_list, Reference_1, Reference_2, num_columns)
                 if dict_fix_to_label:
-                    score_label = evaluate_plate_layout_fixed(plate_opt,dict_fix_to_label, num_columns)
+                    score_label = evaluate_plate_layout_fixed(plate_opt, dict_fix_to_label, num_columns)
                     score_eval = (score_eval+score_label)/2
                 if score_eval <= score:
                     score = score_eval
@@ -420,7 +423,26 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
         Plates_final.append(plate_final)
     return Plates_final
 
+# Get Score for Groups
 def evaluate_plate_layout_fixed(plate, dict_fix_to_label, num_columns):
+    """
+    Scoring function for fixed plate layouts based on fixed labels.
+
+    Parameters
+    ----------
+    plate : array
+        Array of samples distributed across one plate.
+    dict_fix_to_label : dict
+        Dictionary for fixed references to label.
+    num_columns : int
+        Number of columns per plate.
+
+    Returns
+    -------
+    score : float
+        Scoring of the plate layout (groups). The samller the score the better the randomization.
+    """
+    
     score = 0
     for key in dict_fix_to_label:
         coord = np.asarray([[int(ind/num_columns),np.mod(ind,num_columns)] for ind,item in enumerate(plate) if item.astype("U25") in dict_fix_to_label[key].astype("U25")])
@@ -430,11 +452,51 @@ def evaluate_plate_layout_fixed(plate, dict_fix_to_label, num_columns):
             pass
     return score
 
+# Retranslate Identifiers Group -> Sample
 def get_Fingerprints_list_full_fixed(Fingerprints_list, dict_fix_to_label):
+    """
+    Retranslates groups to sample identifiers.
+
+    Parameters
+    ----------
+    Fingerprints_list : list of str
+        Groups assigned to each Fingerprint..
+    dict_fix_to_label : dict
+        Dictionary for fixed references to label.
+
+    Returns
+    -------
+    Fingerprints_list_full : list of str
+        Samples assigned to each Fingerprint.
+    """
+    
     Fingerprints_list_full = [np.asarray([el for key in item for el in dict_fix_to_label[key]]) for item in Fingerprints_list]
     return Fingerprints_list_full
 
+# Get Score for Fingerprints
 def evaluate_plate_layout(plate, Fingerprints_list, Reference_1, Reference_2, num_columns):
+    """
+    Scoring function for samples and references according to fingerprints.
+
+    Parameters
+    ----------
+    plate : array
+        Array of samples distributed across one plate.
+    Fingerprints_list : list of str
+        Samples assigned to each Fingerprint.
+    Reference_1 : str
+        Label of Reference 1.
+    Reference_2 : str
+        Label of Reference 2.
+    num_columns : int
+        Number of columns per plate.
+
+    Returns
+    -------
+    score : float
+        Scoring of the plate layout (fingerprints and references). The samller the score the better the randomization.
+
+    """
     score = 0
     for el in Fingerprints_list:
         coord = np.asarray([[int(ind/num_columns),np.mod(ind,num_columns)] for ind,item in enumerate(plate) if item.astype("U25") in el.astype("U25")])
@@ -1721,6 +1783,8 @@ class Ui_Form(QtWidgets.QWidget):
                 for index, fingerprint in enumerate(self.Fingerprint_IDs):
                     file.write("#"+str(fingerprint)+":%d\n" %self.num_Fingerprint_per_plate[index,ind_p])   
                 file.write("-----------------------\n")
+
+#### Merge into one function???
                 
     def save_Summary_fixed(self):
         with open(os.path.join(self.lineEdit_Output.text(),"Summary.txt"),"w") as file:
