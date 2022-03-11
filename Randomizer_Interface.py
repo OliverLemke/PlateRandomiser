@@ -1818,52 +1818,6 @@ class Ui_Form(QtWidgets.QWidget):
                 for index, fingerprint in enumerate(self.Fingerprint_IDs):
                     file.write("#"+str(fingerprint)+": %d\n" %self.num_Fingerprint_per_plate[index,ind_p])   
                 file.write("-----------------------\n")
-
-#### Merge into one function???
-                
-    # def save_Summary_fixed(self):
-    #     with open(os.path.join(self.lineEdit_Output.text(),"Summary.txt"),"w") as file:
-    #         file.write("--------------------\n")
-    #         file.write("Summary\n")
-    #         file.write("--------------------\n")
-    #         file.write("--------------------\n")
-    #         file.write("Input\n")
-    #         file.write("--------------------\n")
-    #         file.write("Chosen Plate Layout: {0}\n".format(self.Plate_layout))
-    #         file.write("Reference 1: {0}\n".format(self.Reference_1))
-    #         file.write("Reference 2: {0}\n".format(self.Reference_2))
-    #         file.write("Number of Blanks: {0}\n".format(self.num_Blanks))
-    #         file.write("Seed: {0}\n".format(self.seed))
-    #         if self.spinBox_num_Ref1.value()+self.spinBox_num_Ref2.value()!=0:
-    #             file.write("Number of Reference 1: {0}\n".format(self.num_Ref_1))
-    #             file.write("Number of Reference 2: {0}\n".format(self.num_Ref_2))
-    #         else:
-    #             file.write("Minimal Number of References: {0}\n".format(self.num_References))
-    #             file.write("Percentage of Reference 1: {0}\n".format(self.percentage_Ref_1))
-    #         file.write("Number of Plates: {0:d}\n".format(self.num_plates))
-    #         file.write("Columns used for Randomisation: ")
-    #         for ind,imp_column in enumerate(self.imp_columns):
-    #             file.write(str(imp_column))
-    #             if ind == len(self.imp_columns)-1:
-    #                 file.write("\n")
-    #             else:
-    #                 file.write(", ")
-    #         file.write("--------------------\n")
-    #         file.write("Fingerprint Statistics\n")
-    #         file.write("--------------------\n")
-    #         for ind,fingerprint in enumerate(self.Fingerprint_IDs):
-    #             file.write(str(fingerprint)+": "+str(self.num_Fingerprint_fixed[ind])+"\n")
-    #         file.write("--------------------\n")
-    #         file.write("Plate Statistics\n")
-    #         file.write("--------------------\n")
-    #         for ind_p,plate in enumerate(self.Plates_final):
-    #             file.write("Plate "+str(ind_p+1)+"\n")
-    #             file.write("#"+self.Reference_1+": %d\n" %len(np.where(plate==self.Reference_1)[0]))
-    #             file.write("#"+self.Reference_2+": %d\n" %len(np.where(plate==self.Reference_2)[0]))
-    #             file.write("#Blank: %d\n" %len(np.where(plate=="Blank")[0]))
-    #             for index, fingerprint in enumerate(self.Fingerprint_IDs):
-    #                 file.write("#"+str(fingerprint)+":%d\n" %self.num_Fingerprint_per_plate[index,ind_p])   
-    #             file.write("-----------------------\n")
                 
     def state_changed_group(self):
         if self.checkbox_fix_column.isChecked():
