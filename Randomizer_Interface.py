@@ -600,6 +600,8 @@ def generate_Output(data_dict, Plates_final, ref_columns, imp_columns, num_colum
                     file.write("Blank_"+"{:03}".format(c_Blank))
                 elif el == "Empty":
                     file.write("Empty_"+"{:03}".format(c_Empty))
+                elif el == excluded_name:
+                    file.write(excluded_name+"_"+"{:03}".format(c_excluded))
                 else:
                     file.write(str(el))
                 file.write(sep)
