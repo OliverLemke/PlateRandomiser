@@ -393,8 +393,8 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
                     score_eval = (score_eval+score_label)/2
                 if score_eval <= score:
                     score = score_eval
-                    print(j)
-                    print(score)
+                    #print(j)
+                    #print(score)
                     plate_final = plate_opt
         else:
             plate = list(shuffle(plate))
@@ -1414,7 +1414,7 @@ class Ui_Form(QtWidgets.QWidget):
 
     def retranslateUi(self, Form):
         _translate = QtCore.QCoreApplication.translate
-        Form.setWindowTitle(_translate("Form", "Form"))
+        Form.setWindowTitle(_translate("Form", "Plate Randomizer"))
         self.groupBox_Input.setTitle(_translate("Form", "Input Files"))
         self.pushButton_Input.setText(_translate("Form", "Load Data"))
         self.pushButton_Recompute.setText(_translate("Form", "Recompute"))
@@ -1588,14 +1588,18 @@ class Ui_Form(QtWidgets.QWidget):
         
     def load_sheets(self):
         try:
-            list_c = []
-            for button in self.buttongroup_Sheets.buttons():
-                if button.isChecked():
-                    list_c.append(button.text())
-            self.data = pd.read_excel(self.in_file, sheet_name=list_c)
-            self.sheet_names = list_c
-            self.data = pd.concat(self.data)
-            self.get_selections_input()
+            if (self.in_file.endswith(".xlsx")) or (self.in_file.endswith(".xls")) or (self.in_file.endswith(".xlsm")):
+                list_c = []
+                for button in self.buttongroup_Sheets.buttons():
+                    if button.isChecked():
+                        list_c.append(button.text())
+                self.data = pd.read_excel(self.in_file, sheet_name=list_c)
+                self.sheet_names = list_c
+                self.data = pd.concat(self.data)
+                self.get_selections_input()
+            else:
+                self.in_file = str(self.lineEdit_Input.text())
+                self.read_Input()
         except:   
             self.raiseError("Please select Input File first.")    
     
