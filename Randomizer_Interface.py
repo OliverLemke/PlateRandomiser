@@ -1819,6 +1819,10 @@ class Ui_Form(QtWidgets.QWidget):
                 file.write("#"+self.Reference_1+": %d\n" %len(np.where(plate==self.Reference_1)[0]))
                 file.write("#"+self.Reference_2+": %d\n" %len(np.where(plate==self.Reference_2)[0]))
                 file.write("#Blank: %d\n" %len(np.where(plate=="Blank")[0]))
+                if self.Plate_layout not in ["96","384"]:
+                    file.write("#Empty: %d\n" %len(np.where(plate=="Empty")[0]))
+                if self.checkbox_exclude.isChecked():
+                    file.write("#"+self.excluded_label+": %d\n" %self.num_excluded_wells)
                 for index, fingerprint in enumerate(self.Fingerprint_IDs):
                     file.write("#"+str(fingerprint)+": %d\n" %self.num_Fingerprint_per_plate[index,ind_p])   
                 file.write("-----------------------\n")
