@@ -26,7 +26,7 @@ def get_Plate_layout(Plate_layout, num_Blanks, num_References=None, num_Ref_1=No
 
     Parameters
     ----------
-    Plate_layout : {"96","60","88-","-88","-80-","384"}
+    Plate_layout : {"96","60","88-","-88","-80-","84H","A84","A72H","384"}
         Number of wells per plate.
     num_Blanks : int
         Number of Blanks to be included per plate.
@@ -52,7 +52,7 @@ def get_Plate_layout(Plate_layout, num_Blanks, num_References=None, num_Ref_1=No
     if not num_References:
         num_References = num_Ref_1 + num_Ref_2
     
-    if Plate_layout in ["96","60","88-","-88","-80-","384"]:
+    if Plate_layout in ["96","60","88-","-88","-80-","84H","A84","A72H","384"]:
         if Plate_layout == "96":
             num_columns = 12
             num_rows = 8
@@ -65,6 +65,12 @@ def get_Plate_layout(Plate_layout, num_Blanks, num_References=None, num_Ref_1=No
         elif Plate_layout == "-80-":
             num_columns = 10
             num_rows = 8
+        elif (Plate_layout == "84H") or (Plate_layout == "A84"):
+            num_columns = 12
+            num_rows = 7
+        elif Plate_layout == "A72H":
+            num_columns = 12
+            num_rows = 6
         elif Plate_layout == "384":
             num_columns = 24
             num_rows = 16
@@ -294,7 +300,7 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
 
     Parameters
     ----------
-    Plate_layout : {"96","60","88-","-88","-80-","384"}
+    Plate_layout : {"96","60","88-","-88","-80-","84H","A84","A72H","384"}
         Number of wells per plate.
     Plates_overlap : list of arrays
         Samples distributed num_plates over plates.
@@ -339,8 +345,12 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
         num_wells -= 36
     elif Plate_layout in ["-88","88-"]:
         num_wells -= 8
-    if Plate_layout == "-80-":
+    elif Plate_layout == "-80-":
         num_wells -= 16
+    elif Plate_layout in ["84H","A84"]:
+        num_wells -= 12
+    elif Plate_layout == "A72H":
+        num_wells -= 24
 
     Plates_final = []
     for ind,plate in enumerate(Plates_overlap):
@@ -382,10 +392,17 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
                 elif Plate_layout == "88-":
                     for i in range(0,96,12):
                         plate_opt.insert(i+11,"Empty")
-                if Plate_layout == "-80-":
+                elif Plate_layout == "-80-":
                     for i in range(0,96,12):
                         plate_opt.insert(i,"Empty")
                         plate_opt.insert(i+11,"Empty")
+                elif Plate_layout == "84H":
+                    plate_opt.extend(["Empty"]*12)
+                elif Plate_layout == "A84":
+                    plate_opt[0:0] = ["Empty"]*12
+                elif Plate_layout == "A72H":
+                    plate_opt[0:0] = ["Empty"]*12
+                    plate_opt.extend(["Empty"]*12)
                 plate_opt = np.asarray(plate_opt)
                 score_eval = evaluate_plate_layout(plate_opt, Fingerprints_list, Reference_1, Reference_2, num_columns)
                 if dict_fix_to_label:
@@ -415,10 +432,17 @@ def distribute_References(Plate_layout, Plates_overlap, Fingerprints_list, Refer
             elif Plate_layout == "88-":
                 for i in range(0,96,12):
                     plate.insert(i+11,"Empty")
-            if Plate_layout == "-80-":
+            elif Plate_layout == "-80-":
                 for i in range(0,96,12):
                     plate.insert(i,"Empty")
                     plate.insert(i+11,"Empty")
+            elif Plate_layout == "84H":
+                plate.extend(["Empty"]*12)
+            elif Plate_layout == "A84":
+                plate[0:0] = ["Empty"]*12
+            elif Plate_layout == "A72H":
+                plate[0:0] = ["Empty"]*12
+                plate.extend(["Empty"]*12)
             plate_final = np.asarray(plate)
         Plates_final.append(plate_final)
     return Plates_final
@@ -1235,7 +1259,7 @@ class Ui_Form(QtWidgets.QWidget):
         self.gridlayout.addWidget(self.label_Layout, 0, 0, 1, 1)
         self.comboBox_Layout = QtWidgets.QComboBox(self.gridLayoutWidget)
         self.comboBox_Layout.setObjectName("comboBox_Layout")
-        self.comboBox_Layout.addItems(["96","60","88-","-88","-80-","384"])
+        self.comboBox_Layout.addItems(["96","60","88-","-88","-80-","84H","A84","A72H","384"])
         self.gridlayout.addWidget(self.comboBox_Layout, 0, 1, 1, 1)
         self.label_Blanks = QtWidgets.QLabel(self.gridLayoutWidget)
         self.label_Blanks.setObjectName("label_Blanks")
@@ -1451,7 +1475,7 @@ class Ui_Form(QtWidgets.QWidget):
 
     def get_Input(self):
         self.Plate_layout = str(self.comboBox_Layout.currentText())
-        if self.Plate_layout in ["96","60","88-","-88","-80-"]:
+        if self.Plate_layout in ["96","60","88-","-88","-80-","84H","A84","A72H"]:
             self.num_columns = 12
             self.num_rows = 8
         elif self.Plate_layout == "384":
@@ -1491,6 +1515,10 @@ class Ui_Form(QtWidgets.QWidget):
             self.num_wells_to_fill -= 8
         elif self.Plate_layout == "-80-":
             self.num_wells_to_fill -= 16
+        elif self.Plate_layout in ["84H","A84"]:
+            self.num_wells_to_fill -= 12
+        elif self.Plate_layout == "A72H":
+            self.num_wells_to_fill -= 24
             
     
     def open_file(self):
@@ -1930,7 +1958,7 @@ class Exclude(Ui_Form):
     def __init__(self, Plate_layout):
         super().__init__()
         self.Plate_layout = Plate_layout
-        if self.Plate_layout in ["96","60","88-","-88","-80-"]:
+        if self.Plate_layout in ["96","60","88-","-88","-80-","84H","A84","A72H"]:
             self.num_columns = 12
             self.num_rows = 8
         elif self.Plate_layout == "384":
@@ -1984,6 +2012,12 @@ class Exclude(Ui_Form):
             self.wells = [position for position in full_set if (position[1:] not in ["12"])]
         elif self.Plate_layout == "-80-":
             self.wells = [position for position in full_set if (position[1:] not in ["01","12"])]
+        elif self.Plate_layout == "A84":
+            self.wells = [position for position in full_set if (position[0] not in ["A"])]
+        elif self.Plate_layout == "84H":
+            self.wells = [position for position in full_set if (position[0] not in ["H"])]
+        elif self.Plate_layout == "A72H":
+            self.wells = [position for position in full_set if (position[0] not in ["A","H"])]
         elif self.Plate_layout == "384":
             self.wells = [position for position in full_set]
 
