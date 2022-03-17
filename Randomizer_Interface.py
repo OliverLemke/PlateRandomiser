@@ -1107,12 +1107,11 @@ def distribute_samples_fixed(Fingerprints_list, data_dict, num_plates, dict_fix_
             if c == len(Overlap):    
                 Plates_full = [[el for item in plate for el in dict_fix_to_label[item]] for plate in Plates]
             else:
-                Plates_full = [np.zeros(100)]
+                Plates_full = [np.zeros(1000)]
         else: 
-            Plates_full = [np.zeros(100)]
+            Plates_full = [np.zeros(1000)]
         
         if any(np.asarray([len(plate) for plate in Plates_full]) > num_wells_to_fill):
-            #print(np.asarray([len(plate) for plate in Plates_full]))
             print("try again")
         else:
             Repeat = False
