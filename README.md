@@ -1,5 +1,4 @@
 # PlateRandomiser
-
 Graphical interface for randomizing samples across plates (96, 384 wells) equally according to sample fingerprints.
 
 Requirements:\
