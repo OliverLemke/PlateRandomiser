@@ -1,5 +1,7 @@
 # PlateRandomiser
 
+Graphical interface for randomizing samples across plates (96, 384 wells) equally according to sample fingerprints.
+
 Requirements:\
 Developed under Python 3.8.12\
 Packages used for implementation and testing:\
