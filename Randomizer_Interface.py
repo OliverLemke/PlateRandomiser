@@ -4,6 +4,15 @@
 #
 # Created by: PyQt5 UI code generator 5.9.2
 
+### TODO
+# Multistage group optimizer (large sample size/large groups)
+## First: As already implemented
+## Second: Need to think about it
+## Thirs: Additional Plate(s) for overlapping samples
+## Maybe for preistibution (-1)^n for going 1->m,m->1,1->m
+
+## Add batches/batch decomposition
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 import numpy as np
 import pandas as pd
